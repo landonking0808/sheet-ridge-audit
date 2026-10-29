@@ -1,0 +1,173 @@
+{
+ "rule": "Pre-registered selection of held-out PHercParis4 segments (done before any audit result was seen).\nPool: catalog segments with original_volume_id == 20260411134726 (traced natively on the Lasagna scan)\nand a mesh/<id>-on-20260411134726-2.4um.tifxyz. Exclusion fixed in advance: grid (tiff_dimensions) > 3.0 M cells\n(runtime on the 2-vCPU host). Draw: random.Random(20261029).shuffle of the pool sorted by id; take segments in that\norder, skipping one whose wrap-range label (e.g. 'w053-058', '_jordi' and '_copy' stripped) was already taken, until 10.",
+ "n_pool_native": 71,
+ "n_eligible": 67,
+ "excluded": [
+  "20260603222816-20231005123336_v2_flatboi",
+  "20260604223808-20231210121321_v8",
+  "20260926044226-spiral-output-generation-19",
+  "20260602230115-20230702185753_v14"
+ ],
+ "selected": [
+  {
+   "id": "20260603005223",
+   "long_id": "20260603005223-5753_-1",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    200,
+    1056
+   ],
+   "scale": [
+    0.05000000074505806,
+    0.05000000074505806
+   ],
+   "tif": "PHercParis4/segments/20260603005223-5753_-1/mesh/20260603005223-on-20260411134726-2.4um.tifxyz/",
+   "family": "5753_-1"
+  },
+  {
+   "id": "20260701183130",
+   "long_id": "20260701183130-w064-068",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    1635,
+    766
+   ],
+   "scale": [
+    0.05,
+    0.05
+   ],
+   "tif": "PHercParis4/segments/20260701183130-w064-068/mesh/20260701183130-on-20260411134726-2.4um.tifxyz/",
+   "family": "w064-068"
+  },
+  {
+   "id": "20260602225659",
+   "long_id": "20260602225659-5753_0",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    223,
+    1066
+   ],
+   "scale": [
+    0.05000000074505806,
+    0.05000000074505806
+   ],
+   "tif": "PHercParis4/segments/20260602225659-5753_0/mesh/20260602225659-on-20260411134726-2.4um.tifxyz/",
+   "family": "5753_0"
+  },
+  {
+   "id": "20260623141649",
+   "long_id": "20260623141649-w053-058_jordi",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    2327,
+    613
+   ],
+   "scale": [
+    0.05000000074505806,
+    0.05000000074505806
+   ],
+   "tif": "PHercParis4/segments/20260623141649-w053-058_jordi/mesh/20260623141649-on-20260411134726-2.4um.tifxyz/",
+   "family": "w053-058"
+  },
+  {
+   "id": "20260623160554",
+   "long_id": "20260623160554-w098-100",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    2247,
+    619
+   ],
+   "scale": [
+    0.05000000074505806,
+    0.05000000074505806
+   ],
+   "tif": "PHercParis4/segments/20260623160554-w098-100/mesh/20260623160554-on-20260411134726-2.4um.tifxyz/",
+   "family": "w098-100"
+  },
+  {
+   "id": "20260623170305",
+   "long_id": "20260623170305-w122-123",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    1713,
+    610
+   ],
+   "scale": [
+    0.05000000074505806,
+    0.05000000074505806
+   ],
+   "tif": "PHercParis4/segments/20260623170305-w122-123/mesh/20260623170305-on-20260411134726-2.4um.tifxyz/",
+   "family": "w122-123"
+  },
+  {
+   "id": "20260701183147",
+   "long_id": "20260701183147-w120-121",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    1191,
+    766
+   ],
+   "scale": [
+    0.05,
+    0.05
+   ],
+   "tif": "PHercParis4/segments/20260701183147-w120-121/mesh/20260701183147-on-20260411134726-2.4um.tifxyz/",
+   "family": "w120-121"
+  },
+  {
+   "id": "20260623151729",
+   "long_id": "20260623151729-w073-076",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    2193,
+    616
+   ],
+   "scale": [
+    0.05000000074505806,
+    0.05000000074505806
+   ],
+   "tif": "PHercParis4/segments/20260623151729-w073-076/mesh/20260623151729-on-20260411134726-2.4um.tifxyz/",
+   "family": "w073-076"
+  },
+  {
+   "id": "20260701183146",
+   "long_id": "20260701183146-w118-119",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    1171,
+    766
+   ],
+   "scale": [
+    0.05,
+    0.05
+   ],
+   "tif": "PHercParis4/segments/20260701183146-w118-119/mesh/20260701183146-on-20260411134726-2.4um.tifxyz/",
+   "family": "w118-119"
+  },
+  {
+   "id": "20260623154006",
+   "long_id": "20260623154006-w085-088",
+   "orig": "20260411134726",
+   "proc": "surface_tracing",
+   "dims": [
+    2587,
+    624
+   ],
+   "scale": [
+    0.05000000074505806,
+    0.05000000074505806
+   ],
+   "tif": "PHercParis4/segments/20260623154006-w085-088/mesh/20260623154006-on-20260411134726-2.4um.tifxyz/",
+   "family": "w085-088"
+  }
+ ]
+}

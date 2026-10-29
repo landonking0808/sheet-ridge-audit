@@ -1,0 +1,46 @@
+| subset | n | precision (REAL) | precision (REAL + PLAUSIBLE) |
+|---|---|---|---|
+| **all reviewed suspects** | 39 (+1 unreadable) | 18/39 = 0.46 [0.32, 0.61] | 31/39 = 0.79 [0.64, 0.89] |
+| all, counting the unreadable item as FALSE | 40 | 18/40 = 0.45 [0.31, 0.60] | 31/40 = 0.78 [0.62, 0.88] |
+| top 2 per segment | 19 (+1 unreadable) | 13/19 = 0.68 [0.46, 0.85] | 19/19 = 1.00 [0.83, 1.00] |
+| rank 1 only | 9 (+1 unreadable) | 7/9 = 0.78 [0.45, 0.94] | 9/9 = 1.00 [0.70, 1.00] |
+| rank 2 only | 10 | 6/10 = 0.60 [0.31, 0.83] | 10/10 = 1.00 [0.72, 1.00] |
+| mid-ranked (rank 3 .. median), kind-stratified | 20 | 5/20 = 0.25 [0.11, 0.47] | 12/20 = 0.60 [0.39, 0.78] |
+| below median (geom_step fill) | 0 | 0/0 = nan [nan, nan] | 0/0 = nan [nan, nan] |
+| **by kind**: contains `winding` (seam) | 26 (+1 unreadable) | 14/26 = 0.54 [0.35, 0.71] | 21/26 = 0.81 [0.62, 0.91] |
+|   winding seams, top 2 only | 19 (+1 unreadable) | 13/19 = 0.68 [0.46, 0.85] | 19/19 = 1.00 [0.83, 1.00] |
+|   winding seams, mid-ranked only | 7 | 1/7 = 0.14 [0.03, 0.51] | 2/7 = 0.29 [0.08, 0.64] |
+| `off_ridge` only | 7 | 1/7 = 0.14 [0.03, 0.51] | 4/7 = 0.57 [0.25, 0.84] |
+| contains `geom_step` | 19 (+1 unreadable) | 12/19 = 0.63 [0.41, 0.81] | 19/19 = 1.00 [0.83, 1.00] |
+|   `geom_step` without winding | 6 | 3/6 = 0.50 [0.19, 0.81] | 6/6 = 1.00 [0.61, 1.00] |
+|   kinds = `off_ridge` | 7 | 1/7 = 0.14 [0.03, 0.51] | 4/7 = 0.57 [0.25, 0.84] |
+|   kinds = `off_ridge+geom_step` | 6 | 3/6 = 0.50 [0.19, 0.81] | 6/6 = 1.00 [0.61, 1.00] |
+|   kinds = `off_ridge+winding` | 13 | 5/13 = 0.38 [0.18, 0.64] | 8/13 = 0.62 [0.36, 0.82] |
+|   kinds = `off_ridge+winding+geom_step` | 13 (+1 unreadable) | 9/13 = 0.69 [0.42, 0.87] | 13/13 = 1.00 [0.77, 1.00] |
+|   winding_offset = -1 | 9 | 3/9 = 0.33 [0.12, 0.65] | 6/9 = 0.67 [0.35, 0.88] |
+|   winding_offset = -2 | 1 | 1/1 = 1.00 [0.21, 1.00] | 1/1 = 1.00 [0.21, 1.00] |
+|   winding_offset = -4 | 0 (+1 unreadable) | 0/0 = nan [nan, nan] | 0/0 = nan [nan, nan] |
+|   winding_offset = 0 | 13 | 4/13 = 0.31 [0.13, 0.58] | 10/13 = 0.77 [0.50, 0.92] |
+|   winding_offset = 1 | 12 | 7/12 = 0.58 [0.32, 0.81] | 10/12 = 0.83 [0.55, 0.95] |
+|   winding_offset = 2 | 3 | 2/3 = 0.67 [0.21, 0.94] | 3/3 = 1.00 [0.44, 1.00] |
+|   winding_offset = 3 | 1 | 1/1 = 1.00 [0.21, 1.00] | 1/1 = 1.00 [0.21, 1.00] |
+
+Controls (unflagged): n=20; REAL (clear missed defect) 4/20 = 0.20 [0.08, 0.42]; REAL+PLAUSIBLE 10/20 = 0.50 [0.30, 0.70]
+Label counts: suspects {'PLAUSIBLE': 13, 'REAL': 18, 'UNREADABLE': 1, 'FALSE': 8}; controls {'PLAUSIBLE': 6, 'FALSE': 10, 'REAL': 4}
+Fisher (REAL, suspects vs controls): 18/39 vs 4/20, p = 0.087
+Fisher (REAL+PLAUSIBLE): 31/39 vs 10/20, p = 0.035
+Per segment (suspects): 5753_-1_20260603: RRR; 5753_0_20260602: RPRP; w053-058_j_20260623: RRR; w064-068_20260701: RPRFF; w073-076_20260623: RRFF; w085-088_20260623: PRFRF; w098-100_20260623: RRPFP; w118-119_20260701: UPPFP; w120-121_20260701: PPPR; w122-123_20260623: PR
+Controls by segment: 5753_-1_20260603: FP; 5753_0_20260602: FF; w053-058_j_20260623: FR; w064-068_20260701: FF; w073-076_20260623: FR; w085-088_20260623: PP; w098-100_20260623: PR; w118-119_20260701: PF; w120-121_20260701: PF; w122-123_20260623: RF
+
+census suspect_area_frac: median 0.346 (0.154-0.468)
+census frac_on_ridge: median 0.674 (0.600-0.864)
+census winding_change_frac: median 0.588 (0.185-0.711)
+census winding_seam_frac: median 0.204 (0.086-0.324)
+census geom_step_frac: median 0.001 (0.000-0.008)
+census period_vox: median 61.630 (54.410-74.650)
+census n_suspects: median 3258.500 (1141.000-5461.000)
+census runtime_s: median 127.800 (83.900-238.700)
+census sample_s: median 80.700 (54.400-134.300)
+census audit_s: median 110.950 (70.200-211.200)
+census mb_fetched: median 1564.550 (1310.500-1720.800)
+census totals: vertices audited 24,582,168, sampled 13,325,332, suspects 31,536 (winding 14,443, geom_step 147, off_ridge only 17,004), worker time 1522 s

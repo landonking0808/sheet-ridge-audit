@@ -196,8 +196,26 @@ and v0.3 on identical sampled profiles; [details](docs/RESULTS.md)).
 | clean w025 flag area (stride 1) | 12.4% | 11.7% |
 
 The precision gain is inside the intervals, and it is measured on v0.2's
-flags: v0.3's own new flags (its seams) have **not** been reviewed. A
-held-out review on PHercParis4 is the real test and is not reported here.
+flags: v0.3's own new flags (its seams) were not reviewed on this data; the
+held-out test below does that.
+
+**Held-out test (Scroll 1, v0.3)** ([details](docs/eval/heldout/RESULTS.md)).
+v0.3 (git `7ee738e`, `src/` identical to v0.3.0) on 10 PHercParis4 segments
+chosen by a seeded draw, never used in development; 8 huge banner segments
+were audited on one random 1600 x 1600-node window each (a rule fixed after an
+out-of-memory failure, before their results). Labels are again **one AI
+agent's visual review of 2-D CT slices, not expert annotation**.
+
+| v0.3, defaults, PHercParis4 | result (Wilson 95%) |
+|---|---|
+| precision, REAL (all reviewed suspects) | 18/39 = **0.46** [0.32, 0.61] |
+| precision, REAL + PLAUSIBLE | 31/39 = **0.79** [0.64, 0.89] |
+| top 2 per segment, REAL | 13/19 = **0.68** [0.46, 0.85]; REAL + PLAUSIBLE 19/19 |
+| mid-ranked (rank 3 to median), REAL | 5/20 = 0.25 [0.11, 0.47] |
+| unflagged controls with a clear defect (misses) | 3-4/20 |
+| flagged area per segment, median | 0.346 |
+
+Read the top of each segment's list: that is where the clear defects are.
 
 **4. Planted switches vs geometry checkers** (PHerc0139 w025, 20 plants per
 type, same 20 sites; detection = >= 3 new flagged nodes in the plant region;

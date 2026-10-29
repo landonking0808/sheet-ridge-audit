@@ -162,7 +162,8 @@ signed offset for a one-period plant, `off_ridge` for a half-period plant.
   off-ridge band).
 * `geom_step` cannot tell a sheet jump from a real sharp fold.
 * All of this is development data from one scroll. The PHercParis4 held-out
-  review is the real test.
+  review is the real test; it is reported in
+  [`eval/heldout/RESULTS.md`](eval/heldout/RESULTS.md).
 
 # Results (v0.2, 2026-10-29)
 
