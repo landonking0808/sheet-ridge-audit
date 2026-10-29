@@ -28,6 +28,18 @@ class ProfileGrid:
     ridge_is_high: bool = True
     field_spacing: float | None = None
 
+    origin: tuple = (0.0, 0.0)
+    upsample: int = 1
+
+    @property
+    def orig_rows(self):
+        """Sampled rows in the original tifxyz grid's row coordinates."""
+        return self.origin[0] + self.rows / self.upsample
+
+    @property
+    def orig_cols(self):
+        return self.origin[1] + self.cols / self.upsample
+
     @property
     def vertex_spacing(self) -> float:
         """Approximate surface distance (voxels) between sampled vertices."""
@@ -101,4 +113,5 @@ def sample_profiles(field, seg: Segment, stride: int = 1, radius: float = 24.0, 
     return ProfileGrid(rows=rows, cols=cols, zyx=P, normals=N, tangent_u=TU, tangent_v=TV, valid=valid,
                        offsets=offsets, profiles=prof, stride=stride, node_spacing=seg.node_spacing,
                        seconds=time.time() - t0, ridge_is_high=bool(getattr(field, "ridge_is_high", True)),
-                       field_spacing=getattr(field, "typical_spacing", None))
+                       field_spacing=getattr(field, "typical_spacing", None),
+                       origin=tuple(seg.origin), upsample=seg.upsample)

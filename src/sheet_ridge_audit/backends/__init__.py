@@ -77,11 +77,18 @@ def _resolve(name: str, module_path: str | None):
                      f"or set SRA_BACKEND_{name.upper()}=path.py[:factory]")
 
 
-def load_backend(name: str, volume: str | None, level: int = 0, module_path: str | None = None,
+def load_backend(name: str, volume: str | None, level: int | None = None, module_path: str | None = None,
                  cache_mb: int = 768, **options):
+    """Build the field. ``level`` None = backend default (level 0 for ct).
+    Plugin factories are called as ``factory(volume, level=level, **options)``
+    (``level`` omitted when None), so a class such as ``LasagnaField`` can be
+    used directly as the factory."""
     if name in ("ct", "raw", "zarr"):
         if not volume:
             raise ValueError("--volume is required for the ct backend")
-        return ZarrField(volume, level=level, cache_mb=cache_mb)
+        return ZarrField(volume, level=level or 0, cache_mb=cache_mb)
     factory = _resolve(name, module_path)
-    return as_field(factory(volume, level, **options))
+    kw = dict(options)
+    if level is not None:
+        kw["level"] = level
+    return as_field(factory(volume, **kw))

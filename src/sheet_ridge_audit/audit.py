@@ -12,8 +12,8 @@ import numpy as np
 
 from . import __version__
 from .analysis import Params, compute_metrics, detect_suspects, segment_scores
-from .profiles import sample_profiles
-from .tifxyz import read_tifxyz
+from .profiles import parse_roi, sample_profiles
+from .tifxyz import crop_segment, read_tifxyz, upsample_segment
 
 
 def _shape_l0(field):
@@ -21,17 +21,27 @@ def _shape_l0(field):
 
 
 def run_audit(seg_dir, field, *, stride=1, radius=None, step=None, roi=None, params: Params | None = None,
-              verbose=False):
-    """Return (segment, grid, metrics, suspects, labels, scores). No files written."""
+              verbose=False, upsample=1):
+    """Return (segment, grid, metrics, suspects, labels, scores). No files written.
+
+    ``roi`` 'r0:r1,c0:c1' is in the original tifxyz grid; ``upsample`` bilinearly
+    densifies the grid (after cropping) so that neighbouring vertices sit a few
+    voxels apart; ``stride`` then subsamples the densified grid."""
     params = params or Params()
     seg = read_tifxyz(seg_dir, volume_shape_zyx=_shape_l0(field))
+    if roi:
+        r0, r1, c0, c1 = parse_roi(roi, seg.shape)
+        seg = crop_segment(seg, r0, r1, c0, c1)
+    if upsample == "auto":
+        upsample = max(1, min(4, int(round(seg.node_spacing / 5.0))))
+    seg = upsample_segment(seg, int(upsample))
     vs = float(getattr(field, "voxel_size", 1.0) or 1.0)
     if radius is None:
         sp = params.spacing or getattr(field, "typical_spacing", None)
         radius = float(max(1.5 * sp, 12.0)) if sp else max(24.0, 3 * vs)
     if step is None:
         step = max(1.0, 0.5 * vs)
-    grid = sample_profiles(field, seg, stride=stride, radius=radius, step=step, roi=roi, verbose=verbose)
+    grid = sample_profiles(field, seg, stride=stride, radius=radius, step=step, verbose=verbose)
     m = compute_metrics(grid, params)
     suspects, labels = detect_suspects(grid, m, params)
     scores = segment_scores(grid, m, suspects, params)
@@ -60,7 +70,9 @@ def write_outputs(out, seg, grid, m, suspects, labels, scores, field, *, xsec_fi
         "tool": "sheet-ridge-audit", "version": __version__,
         "segment": {"id": sid, "path": os.path.abspath(seg.path), "grid_shape": list(seg.shape),
                     "valid_fraction": round(float(seg.valid.mean()), 4), "scale": list(seg.scale),
-                    "node_spacing_vox": seg.node_spacing},
+                    "node_spacing_vox": seg.node_spacing * seg.upsample, "upsample": seg.upsample,
+                    "grid_origin": list(seg.origin), "meta_uuid": seg.meta.get("uuid")},
+        "coordinates_note": "row/col/bbox_grid are in the original tifxyz grid; zyx in level-0 voxels",
         "volume": volume, "level": level,
         "field": field.describe() if hasattr(field, "describe") else {"name": getattr(field, "name", "?")},
         "stride": grid.stride, "roi": getattr(args, "roi", None) if args else None,
@@ -72,6 +84,7 @@ def write_outputs(out, seg, grid, m, suspects, labels, scores, field, *, xsec_fi
     for s in suspects:
         d = asdict(s)
         d.pop("sub_rc", None)
+        d.pop("seg_rc", None)
         summary["suspects"].append(d)
     with open(os.path.join(out, "suspects.csv"), "w", newline="") as f:
         wr = csv.writer(f)

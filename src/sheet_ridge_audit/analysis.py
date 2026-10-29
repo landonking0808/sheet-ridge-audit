@@ -329,6 +329,13 @@ def nan_gaussian(a, valid, sigma):
 
 
 def compute_metrics(grid, params: Params) -> Metrics:
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return _compute_metrics(grid, params)
+
+
+def _compute_metrics(grid, params: Params) -> Metrics:
     prof, valid, offsets = grid.profiles, grid.valid, grid.offsets
     h, w, K = prof.shape
     on, off, con, sp, ok, idx, S, med, mx = vertex_metrics(prof, valid, offsets, params, grid.vertex_spacing)
@@ -378,19 +385,27 @@ class Suspect:
     severity: float
     area_vertices: int
     area_vx2: float
-    row: int            # full-resolution grid row/col of the centre vertex
-    col: int
+    row: float          # original tifxyz grid row/col of the centre vertex
+    col: float
     zyx: list
-    bbox_grid: list     # [r0, c0, r1, c1] full-resolution grid
+    bbox_grid: list     # [r0, c0, r1, c1] original tifxyz grid
     mean_on_sheet: float
     max_abs_deviation: float   # voxels, max |smoothed ridge offset - segment bias|
     winding_offset: int
     n_step_edges: int
     n_residues: int
     sub_rc: tuple = (0, 0)     # centre in sampled-grid coords
+    seg_rc: tuple = (0, 0)     # centre in the processed (cropped/upsampled) segment grid
 
 
 def detect_suspects(grid, m: Metrics, params: Params):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return _detect_suspects(grid, m, params)
+
+
+def _detect_suspects(grid, m: Metrics, params: Params):
     h, w = m.valid.shape
     s = m.spacing
     vs = grid.vertex_spacing
@@ -467,10 +482,13 @@ def detect_suspects(grid, m: Metrics, params: Params):
         r_s, c_s = int(rr[i]), int(cc[i])
         suspects.append(Suspect(
             id=0, kinds=kinds, severity=round(float(sev), 4), area_vertices=n, area_vx2=round(float(area), 1),
-            row=int(grid.rows[r_s]), col=int(grid.cols[c_s]), zyx=[round(float(v), 2) for v in grid.zyx[r_s, c_s]],
-            bbox_grid=[int(grid.rows[rr.min()]), int(grid.cols[cc.min()]), int(grid.rows[rr.max()]), int(grid.cols[cc.max()])],
+            row=_r(grid.orig_rows[r_s], 2), col=_r(grid.orig_cols[c_s], 2),
+            zyx=[round(float(v), 2) for v in grid.zyx[r_s, c_s]],
+            bbox_grid=[_r(grid.orig_rows[rr.min()], 2), _r(grid.orig_cols[cc.min()], 2),
+                       _r(grid.orig_rows[rr.max()], 2), _r(grid.orig_cols[cc.max()], 2)],
             mean_on_sheet=round(on, 4), max_abs_deviation=round(du, 3), winding_offset=wo,
-            n_step_edges=nst, n_residues=nres, sub_rc=(r_s, c_s)))
+            n_step_edges=nst, n_residues=nres, sub_rc=(r_s, c_s),
+            seg_rc=(int(grid.rows[r_s]), int(grid.cols[c_s]))))
     suspects.sort(key=lambda x: (-x.severity, -x.area_vertices))
     for i, sp_ in enumerate(suspects):
         sp_.id = i + 1
@@ -478,6 +496,13 @@ def detect_suspects(grid, m: Metrics, params: Params):
 
 
 def segment_scores(grid, m: Metrics, suspects, params: Params):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return _segment_scores(grid, m, suspects, params)
+
+
+def _segment_scores(grid, m: Metrics, suspects, params: Params):
     ok = m.valid
     n = int(ok.sum())
     trusted = m.masks["trusted"]

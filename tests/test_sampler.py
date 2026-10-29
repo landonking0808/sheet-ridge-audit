@@ -57,3 +57,24 @@ def test_array_field_matches_map_coordinates():
     f = ArrayField(vol)
     pts = np.array([[1.5, 2.25, 3.75], [8.9, 9.9, 10.9]])
     np.testing.assert_allclose(f.sample(pts), map_coordinates(vol, pts.T, order=1), atol=1e-6)
+
+
+def test_backend_plugin_file(tmp_path):
+    """A plugin file whose factory returns a duck-typed object with sample + meta."""
+    from sheet_ridge_audit.backends import load_backend
+    plug = tmp_path / "my_backend.py"
+    plug.write_text(
+        "import numpy as np\n"
+        "class F:\n"
+        "    def __init__(self, volume, field='cos', level=None):\n"
+        "        self.meta = {'name': 'fake:' + field, 'peak_is_sheet': False, 'voxel_scale': 8.0}\n"
+        "        self.level = level\n"
+        "    def sample(self, p):\n"
+        "        return np.asarray(p, float)[:, 0]\n")
+    f = load_backend("lasagna", "PHercX", None, module_path=f"{plug}:F", field="grad")
+    assert f.name == "fake:grad" and f.ridge_is_high is False and f.voxel_size == 8.0
+    np.testing.assert_allclose(f.sample(np.array([[3.0, 1, 2]])), [3.0])
+    assert f.obj.level is None
+    f2 = load_backend("lasagna", "PHercX", 3, module_path=f"{plug}:F")
+    assert f2.obj.level == 3
+    assert f2.describe()["backend_meta"]["voxel_scale"] == 8.0

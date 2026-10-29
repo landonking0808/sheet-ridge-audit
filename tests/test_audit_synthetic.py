@@ -67,7 +67,7 @@ def test_planted_gradual_sheet_switch_found(tmp_path, vol):
     assert np.nanmedian(np.abs(dev)) > 0.75 * SP
     # nothing far from the bump
     for s in sus:
-        assert bump[s.row, s.col] > 0 or min(abs(s.row - 30), abs(s.col - 30)) < 20
+        assert bump[int(s.row), int(s.col)] > 0 or min(abs(s.row - 30), abs(s.col - 30)) < 20
     # and the clean parts stay clean
     assert np.nanmean(m.on_sheet[:10, :10]) > 0.9
 
@@ -102,3 +102,23 @@ def test_outputs_written(tmp_path, vol):
     p = col["points"]["1"]["p"]
     z, y, x = s["suspects"][0]["zyx"]
     assert p == [x, y, z]  # VC3D stores x, y, z
+
+
+def test_roi_and_upsample_map_back_to_original_grid(tmp_path, vol):
+    zyx, bump = _switch_surface()
+    # coarse grid (one node every 4 voxels), audited densified x2 inside a window
+    coarse = zyx[::2, ::2]
+    d = str(tmp_path / "coarse")
+    write_tifxyz(d, coarse, meta={"scale": [0.25, 0.25]})
+    seg, grid, m, sus, lab, sc = run_audit(d, ArrayField(vol), radius=16, roi="5:28,5:28", upsample=2)
+    assert seg.upsample == 2 and seg.origin == (5, 5)
+    assert abs(seg.node_spacing - 2.0) < 1e-6
+    assert grid.orig_rows[0] == 5 and abs(grid.orig_rows[1] - 5.5) < 1e-9
+    assert sus
+    top = sus[0]
+    # bump centre is at original coarse grid (15, 15)
+    assert 8 <= top.row <= 22 and 8 <= top.col <= 22, (top.row, top.col)
+    # zyx of the suspect equals the coarse surface interpolated at (row, col)
+    r, c = top.row, top.col
+    r0, c0 = int(r), int(c)
+    np.testing.assert_allclose(top.zyx[1:], coarse[r0, c0, 1:] + 4 * np.array([r - r0, c - c0]), atol=0.05)

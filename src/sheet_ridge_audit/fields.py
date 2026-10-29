@@ -50,18 +50,53 @@ class Field:
         return None
 
 
+class _Adapter(Field):
+    """Wraps a duck-typed field: anything with ``sample``; metadata taken from
+    attributes or from a ``meta`` dict (keys ``name``, ``ridge_is_high`` or
+    ``peak_is_sheet``, ``voxel_size`` or ``voxel_scale``, ``typical_spacing``)."""
+
+    def __init__(self, obj):
+        self.obj = obj
+        meta = getattr(obj, "meta", None)
+        meta = meta if isinstance(meta, dict) else {}
+
+        def pick(*names, default=None):
+            for n in names:
+                if hasattr(obj, n) and not callable(getattr(obj, n)):
+                    return getattr(obj, n)
+                if n in meta and not callable(meta[n]):
+                    return meta[n]
+            return default
+        self.name = str(pick("name", default=type(obj).__name__))
+        self.ridge_is_high = bool(pick("ridge_is_high", "peak_is_sheet", default=True))
+        self.voxel_size = float(pick("voxel_size", "voxel_scale", default=1.0) or 1.0)
+        ts = pick("typical_spacing", default=None)
+        self.typical_spacing = float(ts) if ts else None
+        self._meta = {k: v for k, v in meta.items() if not callable(v)}
+
+    def sample(self, points_zyx):
+        return np.asarray(self.obj.sample(points_zyx), np.float32)
+
+    def prefetch(self, points_zyx):
+        f = getattr(self.obj, "prefetch", None)
+        return f(points_zyx) if f else None
+
+    def describe(self):
+        d = super().describe()
+        f = getattr(self.obj, "describe", None)
+        if f:
+            d.update(f())
+        d["backend_meta"] = self._meta
+        return d
+
+
 def as_field(obj) -> Field:
-    """Accept any object with ``sample`` (duck typing) and fill defaults."""
+    """Accept a :class:`Field` as is, or wrap any object with ``sample``."""
+    if isinstance(obj, Field):
+        return obj
     if not hasattr(obj, "sample"):
         raise TypeError(f"{obj!r} has no sample(points_zyx) method")
-    for k, v in (("name", type(obj).__name__), ("ridge_is_high", True), ("voxel_size", 1.0),
-                 ("typical_spacing", None)):
-        if not hasattr(obj, k):
-            try:
-                setattr(obj, k, v)
-            except Exception:
-                pass
-    return obj
+    return _Adapter(obj)
 
 
 class ArrayField(Field):

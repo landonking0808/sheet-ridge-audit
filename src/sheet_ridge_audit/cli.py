@@ -16,13 +16,16 @@ from .backends import load_backend, parse_opts
 
 def _common(p):
     p.add_argument("--volume", help="OME-Zarr URL or path (zarr v2) the segment's coordinates refer to")
-    p.add_argument("--level", type=int, default=0, help="OME-Zarr level to sample (coords are scaled)")
+    p.add_argument("--level", type=int, default=None,
+                   help="OME-Zarr level to sample (coords are scaled); ct default 0, plugins: their default")
     p.add_argument("--stride", type=int, default=1, help="sample every S-th grid row/col")
     p.add_argument("--radius", type=float, default=None,
                    help="profile half-length along the normal, level-0 voxels (default 1.5x spacing or 24)")
     p.add_argument("--step", type=float, default=None, help="profile sample step, level-0 voxels")
     p.add_argument("--spacing", type=float, default=None, help="sheet spacing in voxels (default: estimated)")
-    p.add_argument("--roi", default=None, help="grid window 'r0:r1,c0:c1' (full-resolution grid indices)")
+    p.add_argument("--roi", default=None, help="grid window 'r0:r1,c0:c1' (original tifxyz grid indices)")
+    p.add_argument("--upsample", default="1",
+                   help="densify the grid by this factor (bilinear) before sampling; 'auto' = node spacing / 5 vx, max 4")
     p.add_argument("--backend", default="ct", help="ct (raw CT, default), lasagna, or module:factory / file.py")
     p.add_argument("--backend-module", default=None, help="path/to/backend.py[:factory] for --backend")
     p.add_argument("--backend-opt", action="append", default=[], metavar="KEY=VALUE")
@@ -41,21 +44,29 @@ def _params(a):
                   drift_frac=a.drift_frac, drift_window=a.drift_window, min_region_vx2=a.min_region_vx2)
 
 
+def _up(a):
+    return "auto" if str(a.upsample) == "auto" else int(a.upsample)
+
+
 def _field(a, volume=None):
     return load_backend(a.backend, volume or a.volume, a.level, module_path=a.backend_module,
                         cache_mb=a.cache_mb, **parse_opts(a.backend_opt))
 
 
 def _xsec_field(a, field, volume=None):
-    vol = volume or a.volume
+    """Cross-sections are drawn from raw CT: --xsec-volume (default: --volume
+    for the ct backend), at --xsec-level (default: --level, or 0)."""
     if getattr(a, "no_xsec", False):
         return None
-    if a.backend in ("ct", "raw", "zarr") and (a.xsec_level is None or a.xsec_level == a.level):
+    ct = a.backend in ("ct", "raw", "zarr")
+    vol = a.xsec_volume or (volume or a.volume if ct else None)
+    lvl = a.xsec_level if a.xsec_level is not None else (a.level or 0 if ct else 0)
+    if ct and vol == (volume or a.volume) and lvl == (a.level or 0):
         return field
     if not vol:
-        return field
+        return field  # plugin backend without a CT volume: slice through the field itself
     from .fields import ZarrField
-    return ZarrField(vol, level=a.xsec_level if a.xsec_level is not None else a.level, cache_mb=256)
+    return ZarrField(vol, level=lvl, cache_mb=256)
 
 
 def cmd_audit(a):
@@ -63,7 +74,7 @@ def cmd_audit(a):
     field = _field(a)
     params = _params(a)
     seg, grid, m, sus, lab, scores = run_audit(a.tifxyz, field, stride=a.stride, radius=a.radius, step=a.step,
-                                               roi=a.roi, params=params, verbose=a.verbose)
+                                               roi=a.roi, params=params, verbose=a.verbose, upsample=_up(a))
     log(f"sampled {int(grid.valid.sum())} vertices in {grid.seconds:.1f}s; {len(sus)} suspects")
     out = a.out or os.path.join("sra_out", seg.uuid)
     xf = _xsec_field(a, field)
@@ -122,7 +133,7 @@ def cmd_batch(a):
             field = fields[vol]
             params = _params(a)
             seg, grid, m, sus, lab, scores = run_audit(d, field, stride=a.stride, radius=a.radius, step=a.step,
-                                                       roi=a.roi, params=params, verbose=a.verbose)
+                                                       roi=a.roi, params=params, verbose=a.verbose, upsample=_up(a))
             out = os.path.join(a.out, f"{i:04d}_{seg.uuid}"[:120])
             if not a.no_render:
                 write_outputs(out, seg, grid, m, sus, lab, scores, field, xsec_field=_xsec_field(a, field, vol),
@@ -170,7 +181,7 @@ def cmd_patch_score(a):
         t0 = time.time()
         try:
             seg, grid, m, sus, lab, scores = run_audit(d, field, stride=a.stride, radius=a.radius, step=a.step,
-                                                       roi=a.roi, params=params)
+                                                       roi=a.roi, params=params, upsample=_up(a))
             r = {"path": d, "segment": seg.uuid, "patch_score": round(patch_score(scores), 4),
                  "mean_on_sheet": scores["mean_on_sheet"], "off_sheet_fraction": scores["off_sheet_fraction"],
                  "off_ridge_fraction": scores["off_ridge_fraction"], "neighbour_sheet_fraction": scores["neighbour_sheet_fraction"],
@@ -205,6 +216,7 @@ def main(argv=None):
     p.add_argument("--top-k", type=int, default=10, help="cross-section PNGs for the top K suspects")
     p.add_argument("--no-xsec", action="store_true")
     p.add_argument("--xsec-level", type=int, default=None, help="OME level for cross-sections (default --level)")
+    p.add_argument("--xsec-volume", default=None, help="raw CT OME-Zarr for cross-sections (non-ct backends)")
     p.set_defaults(fn=cmd_audit)
     p = sub.add_parser("batch", help="audit many segments; writes ranking.csv")
     p.add_argument("inputs", nargs="+", help="directories to search for tifxyz, or list files "
@@ -215,6 +227,7 @@ def main(argv=None):
     p.add_argument("--no-xsec", action="store_true")
     p.add_argument("--no-render", action="store_true", help="only the ranking CSV")
     p.add_argument("--xsec-level", type=int, default=None)
+    p.add_argument("--xsec-volume", default=None)
     p.set_defaults(fn=cmd_batch)
     p = sub.add_parser("patch-score", help="single quality scalar per (small) patch")
     p.add_argument("tifxyz", nargs="+", help="tifxyz dirs, globs, or directories of them")

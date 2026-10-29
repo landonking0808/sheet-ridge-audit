@@ -20,8 +20,9 @@ def _aspect_fig(h, w, base=9.0):
 
 
 def _extent(grid):
-    r, c = grid.rows, grid.cols
-    return [c[0] - 0.5 * grid.stride, c[-1] + 0.5 * grid.stride, r[-1] + 0.5 * grid.stride, r[0] - 0.5 * grid.stride]
+    r, c = grid.orig_rows, grid.orig_cols
+    hs = 0.5 * grid.stride / grid.upsample
+    return [c[0] - hs, c[-1] + hs, r[-1] + hs, r[0] - hs]
 
 
 def map_png(path, grid, img, title, cmap="viridis", vmin=None, vmax=None, cbar_label=""):
@@ -31,8 +32,8 @@ def map_png(path, grid, img, title, cmap="viridis", vmin=None, vmax=None, cbar_l
     cm = plt.get_cmap(cmap).with_extremes(bad="#202020")
     im = ax.imshow(a, cmap=cm, vmin=vmin, vmax=vmax, extent=_extent(grid), interpolation="nearest")
     ax.set_title(title, fontsize=10)
-    ax.set_xlabel("grid col")
-    ax.set_ylabel("grid row")
+    ax.set_xlabel("tifxyz grid col")
+    ax.set_ylabel("tifxyz grid row")
     fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02, label=cbar_label)
     fig.tight_layout()
     fig.savefig(path, dpi=110)
@@ -57,8 +58,8 @@ def suspects_png(path, grid, metrics, suspects, labels, title, top=30):
     ext = _extent(grid)
     ax.imshow(np.ma.masked_invalid(img), cmap=cm, extent=ext, interpolation="nearest")
     colors = {"off_sheet": "#ffb000", "step": "#ff2050", "drift": "#40c0ff", "winding": "#ff40ff", "off_ridge": "#40c0ff", "residue": "#ffffff"}
-    X = grid.cols[None, :].repeat(h, 0)
-    Y = grid.rows[:, None].repeat(w, 1)
+    X = grid.orig_cols[None, :].repeat(h, 0)
+    Y = grid.orig_rows[:, None].repeat(w, 1)
     # outlines of the kind masks (thin), then suspect outlines (thick)
     for k in ("off_sheet", "off_ridge", "winding"):
         mk = metrics.masks.get(k)
@@ -67,7 +68,7 @@ def suspects_png(path, grid, metrics, suspects, labels, title, top=30):
     st = metrics.masks.get("step")
     if st is not None and st.any():
         rr, cc = np.nonzero(st)
-        ax.scatter(grid.cols[cc], grid.rows[rr], s=2, c=colors["step"], linewidths=0)
+        ax.scatter(grid.orig_cols[cc], grid.orig_rows[rr], s=2, c=colors["step"], linewidths=0)
     for s in suspects[:top]:
         reg = labels == labels[s.sub_rc]
         if reg.sum() >= 2:
@@ -80,8 +81,8 @@ def suspects_png(path, grid, metrics, suspects, labels, title, top=30):
     ax.set_xlim(ext[0], ext[1])
     ax.set_ylim(ext[2], ext[3])
     ax.set_title(title, fontsize=10)
-    ax.set_xlabel("grid col")
-    ax.set_ylabel("grid row")
+    ax.set_xlabel("tifxyz grid col")
+    ax.set_ylabel("tifxyz grid row")
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
@@ -122,7 +123,7 @@ def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=
     """Two CT slices through the suspect centre, each orthogonal to the surface
     (one along the grid's column direction, one along its row direction), with
     the mesh trace drawn in colour (magenta inside the suspect region)."""
-    r, c = suspect.row, suspect.col
+    r, c = suspect.seg_rc
     nrm = grid_normals(seg.zyx, seg.valid)
     tu, tv = grid_tangents(seg.zyx, seg.valid)
     p0 = seg.zyx[r, c].astype(np.float64)
@@ -130,7 +131,7 @@ def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=
     if not np.isfinite(n).all():
         return False
     b = suspect.bbox_grid
-    ext_vox = seg.node_spacing * max(b[2] - b[0], b[3] - b[1], 1)
+    ext_vox = seg.node_spacing * seg.upsample * max(b[2] - b[0], b[3] - b[1], 1.0 / seg.upsample)
     half_w = half_w or float(np.clip(0.75 * ext_vox + 4 * spacing, 6 * spacing, 400))
     half_h = half_h or float(np.clip(max(3.0 * spacing, 0.3 * half_w), 12, 150))
     vs = getattr(field, "voxel_size", 1.0) or 1.0

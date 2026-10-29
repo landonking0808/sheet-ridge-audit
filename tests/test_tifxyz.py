@@ -20,7 +20,8 @@ def test_reader_handles_minus_one_and_axis_order(tmp_path):
     assert x[2, 3] == -1 and x[0, 0] == -1
     assert x[1, 4] == 2.0 + 4  # x.tif holds X (cols)
     seg = read_tifxyz(d)
-    assert seg.uuid == "s1"
+    assert seg.uuid == "seg"          # folder name without .tifxyz
+    assert seg.meta["uuid"] == "s1"
     assert seg.valid.sum() == valid.sum()
     assert not seg.valid[2, 3] and np.isnan(seg.zyx[2, 3]).all()
     np.testing.assert_allclose(seg.zyx[4, 5], [5.0, 1.0 + 4, 2.0 + 5])  # zyx order
@@ -70,3 +71,23 @@ def test_normals_with_invalid_neighbours():
     v3[1, :] = True
     n3 = grid_normals(zyx3, v3)
     assert np.isnan(n3[1]).all()
+
+
+def test_upsample_and_crop():
+    from sheet_ridge_audit.tifxyz import Segment, crop_segment, upsample_segment
+    zyx = plane_surface(5, 6, z=3.0, y0=0.0, x0=0.0, node=4.0)
+    valid = np.ones((5, 6), bool)
+    valid[2, 2] = False
+    zyx[~valid] = np.nan
+    seg = Segment(path="x", zyx=zyx, valid=valid, meta={"scale": [0.25, 0.25]})
+    up = upsample_segment(seg, 4)
+    assert up.zyx.shape == (17, 21, 3) and up.node_spacing == 1.0
+    np.testing.assert_allclose(up.zyx[2, 5], [3.0, 2.0, 5.0])       # bilinear on the plane
+    assert not up.valid[8, 8]                                        # the invalid node itself
+    assert not up.valid[7, 7] and not up.valid[9, 9]                 # quads touching it
+    assert up.valid[4, 4] and up.valid[0, 20]
+    cr = crop_segment(seg, 1, 4, 2, 6)
+    assert cr.origin == (1, 2) and cr.zyx.shape == (3, 4, 3)
+    up2 = upsample_segment(cr, 2)
+    r, c = up2.to_original(3, 5)
+    assert (r, c) == (2.5, 4.5)
