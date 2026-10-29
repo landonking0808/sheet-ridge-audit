@@ -49,21 +49,34 @@ def _norm_img(x, valid):
     return out
 
 
-def _outline(ax, grid, labels, sid, color, lw):
-    """Outline one suspect (contour of its label, computed on its bbox only)."""
-    rr, cc = np.nonzero(labels == sid) if not isinstance(labels, tuple) else labels
-    if not len(rr):
-        return
-    r0, r1 = max(0, rr.min() - 2), min(grid.valid.shape[0], rr.max() + 3)
-    c0, c1 = max(0, cc.min() - 2), min(grid.valid.shape[1], cc.max() + 3)
-    sub = np.zeros((r1 - r0, c1 - c0), np.float32)
-    sub[rr - r0, cc - c0] = 1
-    ax.contour(grid.orig_cols[c0:c1], grid.orig_rows[r0:r1], sub, levels=[0.5], colors=[color], linewidths=lw)
+def _place_labels(pts, ext, min_d):
+    """Greedy label positions: start up-right of each point, push away from
+    already placed labels. pts: [(x, y)] in data coords; returns [(x, y)]."""
+    out = []
+    w = ext[1] - ext[0]
+    h = abs(ext[2] - ext[3])
+    for x, y in pts:
+        cand = []
+        for r in (1.0, 1.8, 2.6, 3.4):
+            for ang in (-45, -135, 45, 135, 0, 180, -90, 90):
+                t = np.deg2rad(ang)
+                cand.append((x + r * min_d * np.cos(t), y + r * min_d * np.sin(t)))
+        best = None
+        for cx, cy in cand:
+            if not (ext[0] + 0.02 * w <= cx <= ext[1] - 0.02 * w and min(ext[2], ext[3]) + 0.02 * h <= cy
+                    <= max(ext[2], ext[3]) - 0.02 * h):
+                continue
+            if all((cx - ox) ** 2 + (cy - oy) ** 2 >= (0.9 * min_d) ** 2 for ox, oy in out):
+                best = (cx, cy)
+                break
+        out.append(best or cand[0])
+    return out
 
 
-def overview_png(path, grid, m, suspects, labels, title, top=40):
-    """Two panels over the original tifxyz grid: c0 (field at the mesh) and
-    the unwrapped winding offset, each with the suspects outlined and numbered."""
+def overview_png(path, grid, m, suspects, labels, title, top=15):
+    """Two panels over the original tifxyz grid: c0 (field at the mesh) and the
+    unwrapped winding offset. Every suspect is shaded (green = winding change,
+    black = off ridge); the top ``top`` are outlined and numbered with leader lines."""
     h, w = m.valid.shape
     ext = _extent(grid)
     wide = w > 1.6 * h
@@ -74,44 +87,51 @@ def overview_png(path, grid, m, suspects, labels, title, top=40):
     else:
         H = 8.5
         fig, axes = plt.subplots(1, 2, figsize=(float(np.clip(2 * H / max(ar, 1e-3), 8, 20)) + 1.5, H + 1.2))
-    idx = {}
-    if suspects:
-        lr, lc = np.nonzero((labels > 0) & (labels <= top))
-        lv = labels[lr, lc]
-        order = np.argsort(lv, kind="stable")
-        lr, lc, lv = lr[order], lc[order], lv[order]
-        cuts = np.searchsorted(lv, np.arange(1, top + 2))
-        for k in range(min(top, len(suspects))):
-            idx[k + 1] = (lr[cuts[k]:cuts[k + 1]], lc[cuts[k]:cuts[k + 1]])
+    kind_w = np.zeros(len(suspects) + 1, bool)
+    for s in suspects:
+        kind_w[s.id] = "winding" in s.kinds
+    lab = labels
+    overlay = np.zeros((h, w, 4), np.float32)
+    sw = (lab > 0) & kind_w[lab]
+    so = (lab > 0) & ~kind_w[lab]
+    overlay[sw] = (0.0, 0.75, 0.0, 0.55)
+    overlay[so] = (0.0, 0.0, 0.0, 0.45)
+    topm = (lab > 0) & (lab <= top)
     panels = [
-        (m.c0_smooth, "RdBu", -1, 1, "c0: field at the mesh (smoothed); blue = on a ridge, red = in a gap"),
+        (m.c0_smooth, "RdBu", -1, 1, "c0 = Lasagna cos at the mesh (smoothed): blue on a ridge, red in a gap"),
         (np.where(m.trusted, m.rel_offset, np.nan), "PuOr_r", -1.5, 1.5,
-         "winding offset (sheets) vs the dominant sheet; |x|>0.5 = other sheet"),
+         "winding offset vs the dominant sheet (sheets); |x| > 0.5 = another sheet"),
     ]
-    fs = 9 if len(suspects) > 25 else 10
-    for ax, (img, cmap, lo, hi, ttl) in zip(np.atleast_1d(axes), panels):
+    span = max(ext[1] - ext[0], abs(ext[2] - ext[3]))
+    tops = [s for s in suspects[:top]]
+    pos = _place_labels([(s.col, s.row) for s in tops], ext, 0.045 * span)
+    for k, (ax, (img, cmap, lo, hi, ttl)) in enumerate(zip(np.atleast_1d(axes), panels)):
         cm = plt.get_cmap(cmap).with_extremes(bad="#3a3a3a")
         im = ax.imshow(np.ma.masked_invalid(img), cmap=cm, vmin=lo, vmax=hi, extent=ext, interpolation="nearest")
-        for s in suspects[:top]:
-            col = "#000000" if "winding" not in s.kinds else "#00a000"
-            _outline(ax, grid, idx.get(s.id, (np.zeros(0, int), np.zeros(0, int))), s.id, col, 1.3)
-        for s in suspects[:top]:
-            ax.annotate(str(s.id), (s.col, s.row), color="black", fontsize=fs, fontweight="bold",
-                        ha="center", va="center",
-                        bbox=dict(boxstyle="round,pad=0.15", facecolor="#ffff66", alpha=0.85, linewidth=0.5))
+        if k == 0:
+            ax.imshow(overlay, extent=ext, interpolation="nearest")
+        if topm.any():
+            ax.contour(grid.orig_cols, grid.orig_rows, ndi.binary_dilation(topm).astype(np.float32), levels=[0.5],
+                       colors=["#ffff00"], linewidths=1.6)
+        for s, (tx, ty) in zip(tops, pos):
+            ax.annotate(str(s.id), xy=(s.col, s.row), xytext=(tx, ty), color="black", fontsize=10,
+                        fontweight="bold", ha="center", va="center",
+                        bbox=dict(boxstyle="round,pad=0.2", facecolor="#ffff66", alpha=0.95, linewidth=0.6),
+                        arrowprops=dict(arrowstyle="-", color="#ffff00", lw=1.2))
         ax.set_xlim(ext[0], ext[1])
         ax.set_ylim(ext[2], ext[3])
         ax.set_title(ttl, fontsize=10)
         ax.set_xlabel("tifxyz grid col", fontsize=9)
         ax.set_ylabel("tifxyz grid row", fontsize=9)
         fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
-    from matplotlib.lines import Line2D
-    handles = [Line2D([0], [0], color="#000000", lw=1.5, label="suspect: off ridge (gap)"),
-               Line2D([0], [0], color="#00a000", lw=1.5, label="suspect: on another sheet (winding)")]
-    fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=9, frameon=False)
+    from matplotlib.patches import Patch
+    handles = [Patch(facecolor=(0, 0.75, 0, 0.55), label="suspect: on another sheet (winding change)"),
+               Patch(facecolor=(0, 0, 0, 0.45), label="suspect: off the ridge (in a gap)"),
+               Patch(facecolor="none", edgecolor="#d0d000", label=f"top {len(tops)} by score (numbered)")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=9, frameon=False)
     fig.suptitle(title, fontsize=12)
     fig.tight_layout(rect=(0, 0.04, 1, 0.97))
-    fig.savefig(path, dpi=90)
+    fig.savefig(path, dpi=80)
     plt.close(fig)
 
 
@@ -214,6 +234,6 @@ def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=
         ax.legend(loc="upper right", fontsize=7, markerscale=3, framealpha=0.6)
     fig.suptitle(title, fontsize=10)
     fig.tight_layout()
-    fig.savefig(path, dpi=90)
+    fig.savefig(path, dpi=90, bbox_inches="tight")
     plt.close(fig)
     return True

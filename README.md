@@ -21,8 +21,10 @@ Raw CT can be used instead (`--backend ct`) for scans without a Lasagna
 prediction, but at 2.4-8 um it is a much weaker signal (see *Limitations*).
 
 Status: **v0.2 (Oct 2026)**. It runs end to end on real public segments. The
-thresholds are calibrated on planted switches in a real segment (see
-`docs/RESULTS.md`), not on labelled real switches.
+thresholds are calibrated on planted switches in a real segment, not on
+labelled real switches. `docs/RESULTS.md` has the timings, the calibration
+(recall on planted one-period and half-period switches) and the comparison
+with raw CT.
 
 ## Install
 
@@ -30,7 +32,7 @@ thresholds are calibrated on planted switches in a real segment (see
 git clone <this repo> && cd sheet-ridge-audit
 pip install -e .            # Python >= 3.9; numpy, scipy, tifffile, imagecodecs, numcodecs, fsspec, aiohttp, matplotlib
 pip install -e .[test]      # + pytest, zarr (tests only)
-pytest -q                   # offline, ~30 s
+pytest -q                   # offline, ~10 s
 ```
 
 Nothing is downloaded up front. Only the field chunks along the mesh are
@@ -47,8 +49,16 @@ BASE=https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139
 SEG=$BASE/segments/20250108000000-w025_2025010863/mesh/20250108000000-on-20260102150214-2.399um.tifxyz
 mkdir -p w025.tifxyz && for f in x.tif y.tif z.tif meta.json; do curl -s -o w025.tifxyz/$f $SEG/$f; done   # 22 MB
 
-sheet-ridge-audit audit w025.tifxyz --scroll PHerc0139 --stride 2 --out out/w025
+sheet-ridge-audit audit w025.tifxyz --scroll PHerc0139 --out out/w025
 ```
+
+On the 2-vCPU test host this took **138 s** for 1.55 million vertices. That
+breaks down into 88 s of sampling (570 MB of Lasagna `cos` streamed), 25 s of
+analysis, and 25 s of rendering, including 6 CT cross-sections at OME level 2.
+It found 866 suspects covering 12.4% of the surface; the largest is 0.6% of
+the segment. `--stride 2` (every 2nd node; about 1 min) is fine for a survey,
+but small, steep switches need stride 1 to get their winding sign right (see
+`docs/RESULTS.md`).
 
 * `--scroll PHerc0139` selects the Lasagna run from the built-in registry. It
   covers all 22 public Lasagna outputs (`sheet-ridge-audit lasagna-registry`).
@@ -58,10 +68,9 @@ sheet-ridge-audit audit w025.tifxyz --scroll PHerc0139 --stride 2 --out out/w025
 * Cross-sections are drawn from the raw CT of the same scan. Its URL comes from
   the registry; override it with `--xsec-volume`. They are sampled at OME level
   2 on 2.4 um scans and level 1 otherwise (`--xsec-level`).
-* `--stride 2` samples every 2nd node. The segment's nodes are 20 voxels
-  apart and the sheet period is about 72 voxels, so stride 2 still gives about
-  1.8 vertices per period. `--upsample auto` (the default) densifies coarse
-  grids, for example on 8.64 um scans where the period is about 13 voxels.
+* `--upsample auto` (the default) densifies grids whose nodes are more than
+  1/3 period apart. On the 8.64 um scans, where the period is about 15
+  voxels, it upsamples 4x.
 
 Other scans:
 
@@ -69,7 +78,7 @@ Other scans:
 # Scroll 1 (PHercParis4), native on its Lasagna scan
 sheet-ridge-audit audit SEG.tifxyz --scroll PHercParis4 --stride 2 --out out/s1
 # raw CT only (weak; no Lasagna for this scan)
-sheet-ridge-audit audit SEG.tifxyz --backend ct --volume https://.../scan.zarr --level 1 --out out/ct
+sheet-ridge-audit audit SEG.tifxyz --backend ct --volume https://.../scan.zarr --level 2 --out out/ct   # level 1 streams ~5x more
 # many segments -> ranking.csv
 sheet-ridge-audit batch segments/ --scroll PHerc0139 --stride 2 --out out/batch
 ```
@@ -78,7 +87,7 @@ sheet-ridge-audit batch segments/ --scroll PHerc0139 --stride 2 --out out/batch
 
 | file | what it is |
 |---|---|
-| `overview.png` | Two panels over the tifxyz grid. Left: c0 (blue = on a ridge, red = in a gap). Right: the unwrapped winding offset (0 = the segment's dominant sheet, +-1 = a neighbouring sheet). Suspects are outlined (black = off-ridge, green = winding change) and numbered by rank. |
+| `overview.png` | Two panels over the tifxyz grid. Left: c0 (blue = on a ridge, red = in a gap). Every suspect is shaded green if it is a winding change, dark if it is off-ridge only. Right: the unwrapped winding offset (0 = the segment's dominant sheet, +-1 = a neighbouring sheet). In both panels the top 15 suspects are outlined in yellow and numbered by rank. |
 | `c0.png`, `winding.png`, `quality.png` | The same maps unsmoothed, plus the phase coherence. |
 | `suspects.csv` | One row per suspect: `id` (rank), `kinds` (`off_ridge`, `winding`, `phase_cut`), `score`, `severity`, area (vertices, voxel^2, period^2), centre `row`/`col` (original tifxyz grid) and `z`/`y`/`x` (level-0 voxels), bbox, `mean_c0`, `min_c0`, `winding_offset` (+1 = one sheet along the mesh normal), `max_abs_offset_cycles`, `n_residues`. |
 | `summary.json` | Segment info, field description (manifest, chunks and MB fetched), parameters, the pilot period measurement, segment scores (`on_ridge_fraction`, `winding_change_fraction`, `suspect_area_fraction`, ...), the suspect list, and timings. |
@@ -94,13 +103,15 @@ For each sampled vertex, the profile `p(t)` along the unit mesh normal,
 
 | per vertex | definition |
 |---|---|
-| `c0` | `p(0)`: Lasagna cos at the mesh (raw CT: `cos(2 pi mu)` of the smoothed phase below) |
+| `c0` | `p(0)`: Lasagna cos at the mesh. With raw CT: `cos(2 pi (mu - mu_ref))`, where `mu_ref` is the segment's circular-mean phase, because tracers follow one face of the bright band. |
 | phasor `u` | `sum_t w(t) (p(t) - mean) exp(-2 pi i t / P_v)`, normalised so a clean cosine gives about 1; `w` = Hann window, `P_v` = local period |
 | `mu` | `arg(U) / 2 pi` of the phasor averaged over 0.25 period of surface: the mesh's offset from its nearest ridge, in periods, wrapped to (-0.5, 0.5] |
 | winding offset | `mu` unwrapped over the grid (quality-guided, union-find maximum spanning forest, edges ordered by phase coherence), minus the segment median; `W = round(...)` |
 
 **Period.** A pilot step samples about 40 clusters of 36 vertices over +-2.5
-periods and takes the peak of the mean power spectrum. For Lasagna the prior is
+periods and takes the peak of the mean power spectrum. For a cos field this is
+cross-checked against the median ridge-to-ridge distance, which is used
+instead if the two differ by more than 20%. For Lasagna the prior is
 `1.2 / grad_mag`, because `grad_mag` alone overstates the sheet density by
 15-30% on real data. The local period map is the field's `1/grad_mag`,
 rescaled so its median equals the measured period.
@@ -168,13 +179,27 @@ threshold sweep).
   that crosses the gap over at least a few vertices, is visible to the phase
   unwrapping. Abrupt jumps are what geometry checkers (normal and stretch
   jumps) already catch.
-* **Steep ramps.** If a switch rises more steeply than about 45 degrees
-  relative to the sheets, the profile along the tilted normal is distorted. The
-  ramp can then be missed as a winding change, though it is usually still
-  flagged as off-ridge.
-* **Raw CT mode is weak.** At 2.4-8.6 um, single CT profiles are noisy:
-  per-profile correlation with Lasagna cos is only 0.1-0.2. CT detection uses
-  the same phase method, but expect many more flags and lower reliability. The
+* **Steep or small switches, and stride.** A ramp needs at least about 3
+  sampled vertices per period of offset for the unwrapping to follow it. On
+  planted switches with a 1.7-period ramp, the winding sign came out right on
+  0.55 of them at `--stride 2` and 0.90 at stride 1. If a switch rises more
+  steeply than about 45 degrees relative to the sheets, the profile along the
+  tilted normal is distorted. Such switches are usually still flagged
+  `off_ridge`.
+* **Many real-data flags.** On PHerc0139 w025, about 12% of the surface is in
+  some suspect at the defaults (866 suspects, most of them small off-ridge
+  patches). Use the ranking (the top suspects are the large winding changes)
+  and `--c0-thr` / `--min-area` to tighten. The calibration in
+  `docs/RESULTS.md` shows what stricter settings cost.
+* **Raw CT mode is weak.** At 2.4-8.6 um, single CT profiles are noisy, and
+  per-profile correlation with Lasagna cos is only 0.1-0.2. In v0.2 tests on
+  PHerc0139 at OME level 2:
+  * the CT ridge phase tracks Lasagna's only loosely (median residual 0.11
+    period after removing a constant offset);
+  * CT mode flags about 3x the area.
+
+  CT detection uses the same phase method, but expect many more flags and
+  lower reliability. The
   old v0.1 CT results (`docs/RESULTS.md`) showed no separation on labelled
   Scroll 4 patches.
 * **Not a labelled benchmark.** The calibration uses synthetic plants in a

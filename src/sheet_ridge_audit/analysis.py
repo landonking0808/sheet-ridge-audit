@@ -5,8 +5,9 @@ the mesh normal, is reduced to:
 
 * ``c0``: the field at the mesh, ``p(0)``. With Lasagna ``cos`` this is the
   cosine of the winding phase: +1 on a sheet ridge, -1 midway between two
-  sheets. (Raw CT has no such scale; there ``c0 = cos(2 pi * phase)`` of the
-  smoothed phasor below.)
+  sheets. (Raw CT has no such scale; there ``c0 = cos(2 pi (mu - mu_ref))``
+  with ``mu`` the smoothed phase below and ``mu_ref`` its circular mean over
+  the segment, because tracers follow one face of the bright band.)
 * a **phasor** ``u = sum_t w(t) (p(t) - mean) exp(-2 pi i t / P_v) / (0.5 sum_t w A)``
   at the local sheet period ``P_v`` (Hann window ``w``). For a profile
   ``cos(2 pi (t - t0) / P)`` its phase is ``-2 pi t0 / P``: ``t0`` is the
@@ -286,7 +287,11 @@ def _compute_metrics(grid, params: Params) -> Metrics:
     if cos_field:
         c0 = prof[..., K // 2].copy()
     else:
-        c0 = np.cos(2 * np.pi * mu).astype(np.float32)
+        # raw CT: the bright band is not centred where a tracer puts the mesh (it follows
+        # one face), so measure c0 relative to the segment's own circular-mean phase
+        okm = valid & np.isfinite(mu) & (np.nan_to_num(amplitude) >= params.min_quality)
+        zc = np.exp(2j * np.pi * mu[okm]).mean() if okm.any() else 1.0
+        c0 = np.cos(2 * np.pi * (mu - np.angle(zc) / (2 * np.pi))).astype(np.float32)
     c0[~valid] = np.nan
     c0s = nan_gaussian(c0, valid, sig)
     trusted = valid & np.isfinite(mu) & (np.nan_to_num(amplitude) >= params.min_quality)

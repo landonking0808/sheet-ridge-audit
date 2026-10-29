@@ -3,7 +3,9 @@
 Two steps:
 
 * :func:`pilot_period` measures the sheet period (voxels along the normal) on
-  ~1500 random vertices, from the mean power spectrum of long profiles. With a
+  ~1500 vertices in ~40 random clusters: the peak of the mean power
+  spectrum, cross-checked for a cos field by the median ridge-to-ridge
+  distance (used instead when the two disagree by > 20%). With a
   field that offers ``local_period(points)`` (Lasagna: 1.2/grad_mag) that is
   used as the prior and its scale is corrected by the measurement.
 * :func:`sample_profiles` samples every (strided) vertex over ``+-radius``
@@ -106,7 +108,9 @@ def spectrum_period(prof, step, pmin, pmax, pad=2048):
     S = prof[np.isfinite(prof).all(1)]
     if len(S) < 20:
         return None, 0.0
-    S = S - S.mean(1, keepdims=True)
+    x = np.linspace(-1, 1, S.shape[1])
+    slope = (S * x[None]).sum(1, keepdims=True) / (x * x).sum()
+    S = S - S.mean(1, keepdims=True) - slope * x[None]       # remove offset and linear trend
     S = S * np.hanning(S.shape[1])[None]
     F = np.abs(np.fft.rfft(S, n=pad, axis=1)) ** 2
     pw = F.mean(0)
@@ -118,6 +122,8 @@ def spectrum_period(prof, step, pmin, pmax, pad=2048):
         return None, 0.0
     idx = np.nonzero(band)[0]
     i = idx[np.argmax(pw[idx])]
+    if i in (idx[0], idx[-1]) and len(idx) > 2 and not (pw[i] > pw[i - 1] and pw[i] > pw[i + 1]):
+        return None, 0.0          # maximum on the band edge, not a real peak
     if 0 < i < len(pw) - 1:
         y0, y1, y2 = pw[i - 1], pw[i], pw[i + 1]
         d = y0 - 2 * y1 + y2
@@ -127,6 +133,40 @@ def spectrum_period(prof, step, pmin, pmax, pad=2048):
         f = fr[i]
     contrast = float(pw[i] / (np.median(pw[idx]) + 1e-12))
     return (float(1.0 / f) if f > 0 else None), contrast
+
+
+def peak_period(prof, offsets, near, thr=0.3, gap=-0.2, min_count=20):
+    """Median distance between consecutive sheet ridges of cos-field profiles:
+    peaks above ``thr`` within ``near`` voxels of the mesh, where two peaks only
+    count as separate sheets if the profile dips below ``gap`` between them
+    (otherwise the higher one is kept: shoulders and split ridges are not sheets)."""
+    S = prof[np.isfinite(prof).all(1)]
+    if len(S) < 5:
+        return None, 0
+    pk = (S[:, 1:-1] > S[:, :-2]) & (S[:, 1:-1] >= S[:, 2:]) & (S[:, 1:-1] > thr)
+    pk &= (np.abs(offsets[1:-1]) <= near)[None]
+    d = []
+    for row, p in zip(pk, S):
+        idx = np.nonzero(row)[0] + 1
+        keep = []
+        for i in idx:
+            if keep and np.min(p[keep[-1]:i + 1]) > gap:
+                if p[i] > p[keep[-1]]:
+                    keep[-1] = i
+                continue
+            keep.append(i)
+        if len(keep) >= 2:
+            d.append(np.diff(offsets[keep]))
+    d = np.concatenate(d) if d else np.zeros(0)
+    d = d[d < 2 * near]
+    if len(d) < min_count:
+        return None, int(len(d))
+    # a finite window of width 2*near holds an interval d with probability ~ (2*near - d):
+    # weight by the inverse so long intervals are not under-counted (window selection bias)
+    w = 1.0 / (2 * near - d)
+    o = np.argsort(d)
+    cw = np.cumsum(w[o])
+    return float(d[o][np.searchsorted(cw, 0.5 * cw[-1])]), int(len(d))
 
 
 def pilot_period(field, seg: Segment, n: int = 1500, seed: int = 0, prior: float | None = None):
@@ -166,13 +206,13 @@ def pilot_period(field, seg: Segment, n: int = 1500, seed: int = 0, prior: float
     vs = float(getattr(field, "voxel_size", 1.0) or 1.0)
     if p0:
         radius = 2.5 * p0
-        pmin, pmax = 0.5 * p0, 2.0 * p0
+        pmin, pmax = 0.6 * p0, 1.7 * p0
     else:
-        radius = max(80.0, 10 * vs)   # unknown: look for 4..radius voxel periods
+        radius = max(160.0, 12 * vs)   # unknown: look for periods up to ~radius voxels
         pmin, pmax = max(4.0, 2 * vs), radius
     step = max(0.5, min(vs, (p0 or 16.0) / 16.0))
     per, con = None, 0.0
-    for shrink in (1.0, 0.6, 0.4):
+    for shrink in (1.0, 0.6, 0.4, 0.25, 0.15):
         R = radius * shrink
         offsets = np.arange(-R, R + 1e-6, step, dtype=np.float32)
         prof = _sample_lines(field, P, N, offsets)
@@ -180,6 +220,16 @@ def pilot_period(field, seg: Segment, n: int = 1500, seed: int = 0, prior: float
         if nfin >= 20:
             per, con = spectrum_period(prof, step, pmin, min(pmax, 1.6 * R))
             radius = R
+            if is_cos_field(field):
+                # clean cosine: the median ridge-to-ridge distance near the mesh is more
+                # robust than the spectrum (which local spacing variation smears)
+                pp, npk = peak_period(prof, offsets, near=R)
+                info["peak_intervals"] = npk
+                info["peak_period"] = round(pp, 3) if pp else None
+                if pp is not None and (per is None or abs(per / pp - 1) > 0.2):
+                    info["spectral_period"] = round(per, 3) if per else None
+                    per, con = pp, -1.0
+                    info["method"] = "median peak-to-peak (spectrum disagreed by > 20%)"
             break
     info.update(radius=round(radius, 2), step=round(step, 3), spectral_contrast=round(con, 2),
                 prior=round(p0, 3) if p0 else None)
