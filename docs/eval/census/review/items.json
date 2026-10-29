@@ -1,0 +1,1558 @@
+{
+ "segments": [
+  "w035",
+  "w037",
+  "w044",
+  "w045",
+  "w027",
+  "w049",
+  "w050",
+  "w023"
+ ],
+ "items": [
+  {
+   "stratum": "top3",
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 323.8209,
+   "row": 94.0,
+   "col": 680.0,
+   "zyx": [
+    10099.77,
+    11273.6,
+    13752.75
+   ],
+   "W": "2",
+   "blind": "B24",
+   "zyx_mesh": [
+    10099.765625,
+    11273.595703125,
+    13752.75390625
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 311.8735,
+   "row": 134.0,
+   "col": 680.0,
+   "zyx": [
+    10887.8,
+    11227.83,
+    13727.28
+   ],
+   "W": "2",
+   "blind": "B21",
+   "zyx_mesh": [
+    10887.80078125,
+    11227.83203125,
+    13727.28125
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 309.5536,
+   "row": 94.0,
+   "col": 642.0,
+   "zyx": [
+    10105.79,
+    11693.76,
+    13130.67
+   ],
+   "W": "2",
+   "blind": "B15",
+   "zyx_mesh": [
+    10105.791015625,
+    11693.7646484375,
+    13130.673828125
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 308.3166,
+   "row": 1084.0,
+   "col": 760.0,
+   "zyx": [
+    28054.47,
+    8613.35,
+    13100.02
+   ],
+   "W": "2",
+   "blind": "B04",
+   "zyx_mesh": [
+    28054.470703125,
+    8613.349609375,
+    13100.0185546875
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 307.1241,
+   "row": 1084.0,
+   "col": 638.0,
+   "zyx": [
+    28163.0,
+    9004.99,
+    10751.31
+   ],
+   "W": "2",
+   "blind": "B11",
+   "zyx_mesh": [
+    28162.99609375,
+    9004.9873046875,
+    10751.306640625
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 302.3542,
+   "row": 720.0,
+   "col": 1250.0,
+   "zyx": [
+    21496.38,
+    14309.6,
+    16421.34
+   ],
+   "W": "2",
+   "blind": "B09",
+   "zyx_mesh": [
+    21496.384765625,
+    14309.599609375,
+    16421.33984375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w044",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260115000000-w044_2026011522/mesh/20260115000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 310.0533,
+   "row": 76.0,
+   "col": 1032.0,
+   "zyx": [
+    8802.33,
+    10774.69,
+    17028.5
+   ],
+   "W": "3",
+   "blind": "B43",
+   "zyx_mesh": [
+    8802.33203125,
+    10774.685546875,
+    17028.498046875
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w044",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260115000000-w044_2026011522/mesh/20260115000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 294.9306,
+   "row": 76.0,
+   "col": 1078.0,
+   "zyx": [
+    8814.64,
+    11140.96,
+    17757.44
+   ],
+   "W": "2",
+   "blind": "B44",
+   "zyx_mesh": [
+    8814.6396484375,
+    11140.9580078125,
+    17757.443359375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w044",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260115000000-w044_2026011522/mesh/20260115000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 294.8204,
+   "row": 76.0,
+   "col": 990.0,
+   "zyx": [
+    8731.6,
+    10287.99,
+    16358.18
+   ],
+   "W": "2",
+   "blind": "B35",
+   "zyx_mesh": [
+    8731.6005859375,
+    10287.9892578125,
+    16358.17578125
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 322.8676,
+   "row": 102.0,
+   "col": 1162.0,
+   "zyx": [
+    9389.57,
+    11534.72,
+    19069.51
+   ],
+   "W": "2",
+   "blind": "B19",
+   "zyx_mesh": [
+    9389.5703125,
+    11534.71875,
+    19069.509765625
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 293.8369,
+   "row": 102.0,
+   "col": 1198.0,
+   "zyx": [
+    9451.53,
+    12063.54,
+    19283.8
+   ],
+   "W": "2",
+   "blind": "B16",
+   "zyx_mesh": [
+    9451.5302734375,
+    12063.5400390625,
+    19283.802734375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 268.941,
+   "row": 212.0,
+   "col": 1162.0,
+   "zyx": [
+    11503.89,
+    11128.8,
+    19148.52
+   ],
+   "W": "2",
+   "blind": "B42",
+   "zyx_mesh": [
+    11503.8857421875,
+    11128.796875,
+    19148.521484375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 250.4629,
+   "row": 486.0,
+   "col": 70.0,
+   "zyx": [
+    12762.27,
+    11368.68,
+    16959.13
+   ],
+   "W": "-2",
+   "blind": "B51",
+   "zyx_mesh": [
+    12762.2685546875,
+    11368.6767578125,
+    16959.1328125
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 234.0986,
+   "row": 486.0,
+   "col": 276.0,
+   "zyx": [
+    13077.98,
+    14025.83,
+    16755.42
+   ],
+   "W": "-2",
+   "blind": "B39",
+   "zyx_mesh": [
+    13077.982421875,
+    14025.83203125,
+    16755.41796875
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 227.3614,
+   "row": 1240.0,
+   "col": 1234.0,
+   "zyx": [
+    27877.05,
+    10651.26,
+    17001.63
+   ],
+   "W": "-2",
+   "blind": "B17",
+   "zyx_mesh": [
+    27877.0546875,
+    10651.26171875,
+    17001.630859375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 267.8947,
+   "row": 158.0,
+   "col": 552.0,
+   "zyx": [
+    11058.09,
+    13735.1,
+    8074.0
+   ],
+   "W": "2",
+   "blind": "B29",
+   "zyx_mesh": [
+    11058.08984375,
+    13735.1025390625,
+    8074.001953125
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 265.7685,
+   "row": 156.0,
+   "col": 514.0,
+   "zyx": [
+    11081.86,
+    14455.82,
+    8182.8
+   ],
+   "W": "2",
+   "blind": "B20",
+   "zyx_mesh": [
+    11081.85546875,
+    14455.8154296875,
+    8182.8017578125
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 258.1303,
+   "row": 124.0,
+   "col": 588.0,
+   "zyx": [
+    10383.08,
+    13161.4,
+    7864.15
+   ],
+   "W": "2",
+   "blind": "B52",
+   "zyx_mesh": [
+    10383.078125,
+    13161.3974609375,
+    7864.150390625
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 292.899,
+   "row": 104.0,
+   "col": 136.0,
+   "zyx": [
+    10839.02,
+    10699.8,
+    17434.22
+   ],
+   "W": "2",
+   "blind": "B37",
+   "zyx_mesh": [
+    10839.01953125,
+    10699.8046875,
+    17434.22265625
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 283.1,
+   "row": 66.0,
+   "col": 248.0,
+   "zyx": [
+    10006.56,
+    11098.35,
+    19575.35
+   ],
+   "W": "2",
+   "blind": "B41",
+   "zyx_mesh": [
+    10006.560546875,
+    11098.353515625,
+    19575.349609375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 281.296,
+   "row": 66.0,
+   "col": 210.0,
+   "zyx": [
+    10044.25,
+    11008.73,
+    18834.94
+   ],
+   "W": "2",
+   "blind": "B54",
+   "zyx_mesh": [
+    10044.2529296875,
+    11008.734375,
+    18834.943359375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w023",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260311000000-w023_202603112281/mesh/20260311000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1,
+   "kinds": "off_ridge+winding",
+   "score": 83.4562,
+   "row": 390.0,
+   "col": 292.0,
+   "zyx": [
+    11621.34,
+    15428.69,
+    15205.3
+   ],
+   "W": "-1",
+   "blind": "B10",
+   "zyx_mesh": [
+    11621.34375,
+    15428.689453125,
+    15205.3037109375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w023",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260311000000-w023_202603112281/mesh/20260311000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 2,
+   "kinds": "off_ridge+winding",
+   "score": 80.2568,
+   "row": 1282.0,
+   "col": 982.0,
+   "zyx": [
+    28573.71,
+    9780.1,
+    15776.91
+   ],
+   "W": "1",
+   "blind": "B12",
+   "zyx_mesh": [
+    28573.712890625,
+    9780.0986328125,
+    15776.9052734375
+   ]
+  },
+  {
+   "stratum": "top3",
+   "seg": "w023",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260311000000-w023_202603112281/mesh/20260311000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 3,
+   "kinds": "off_ridge+winding",
+   "score": 72.3164,
+   "row": 1022.0,
+   "col": 446.0,
+   "zyx": [
+    23380.3,
+    13231.64,
+    12614.67
+   ],
+   "W": "1",
+   "blind": "B01",
+   "zyx_mesh": [
+    23380.30078125,
+    13231.64453125,
+    12614.666015625
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 233,
+   "kinds": "off_ridge+winding",
+   "score": 75.4987,
+   "row": 558.0,
+   "col": 1182.0,
+   "zyx": [
+    14591.72,
+    11229.75,
+    17455.34
+   ],
+   "W": "-1",
+   "blind": "B26",
+   "zyx_mesh": [
+    14591.724609375,
+    11229.7548828125,
+    17455.3359375
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 430,
+   "kinds": "off_ridge+winding",
+   "score": 61.1587,
+   "row": 406.0,
+   "col": 1014.0,
+   "zyx": [
+    15103.23,
+    9947.35,
+    16215.39
+   ],
+   "W": "-1",
+   "blind": "B49",
+   "zyx_mesh": [
+    15103.2265625,
+    9947.345703125,
+    16215.3857421875
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 505,
+   "kinds": "off_ridge+phase_cut",
+   "score": 42.4781,
+   "row": 802.0,
+   "col": 494.0,
+   "zyx": [
+    22679.91,
+    11147.26,
+    8554.13
+   ],
+   "W": "-1",
+   "blind": "B36",
+   "zyx_mesh": [
+    22679.91015625,
+    11147.2568359375,
+    8554.1259765625
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 220,
+   "kinds": "off_ridge+winding",
+   "score": 86.3982,
+   "row": 202.0,
+   "col": 1320.0,
+   "zyx": [
+    12128.93,
+    11877.61,
+    19278.38
+   ],
+   "W": "-1",
+   "blind": "B33",
+   "zyx_mesh": [
+    12128.92578125,
+    11877.60546875,
+    19278.375
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 46,
+   "kinds": "off_ridge+winding",
+   "score": 166.8861,
+   "row": 436.0,
+   "col": 1274.0,
+   "zyx": [
+    16063.71,
+    12761.06,
+    18744.74
+   ],
+   "W": "1",
+   "blind": "B50",
+   "zyx_mesh": [
+    16063.708984375,
+    12761.0625,
+    18744.736328125
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 501,
+   "kinds": "off_ridge+winding",
+   "score": 43.2228,
+   "row": 354.0,
+   "col": 920.0,
+   "zyx": [
+    14127.71,
+    10333.03,
+    14359.74
+   ],
+   "W": "-1",
+   "blind": "B22",
+   "zyx_mesh": [
+    14127.712890625,
+    10333.0322265625,
+    14359.7373046875
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w044",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260115000000-w044_2026011522/mesh/20260115000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 224,
+   "kinds": "winding",
+   "score": 143.7052,
+   "row": 466.0,
+   "col": 1426.0,
+   "zyx": [
+    16764.53,
+    15468.58,
+    16825.13
+   ],
+   "W": "1",
+   "blind": "B23",
+   "zyx_mesh": [
+    16764.533203125,
+    15468.5791015625,
+    16825.134765625
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 322,
+   "kinds": "winding",
+   "score": 125.9585,
+   "row": 934.0,
+   "col": 66.0,
+   "zyx": [
+    25480.31,
+    15464.84,
+    14428.72
+   ],
+   "W": "2",
+   "blind": "B38",
+   "zyx_mesh": [
+    25480.310546875,
+    15464.8388671875,
+    14428.7236328125
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 557,
+   "kinds": "off_ridge+winding",
+   "score": 28.8544,
+   "row": 672.0,
+   "col": 1506.0,
+   "zyx": [
+    21316.8,
+    14590.63,
+    17815.64
+   ],
+   "W": "1",
+   "blind": "B45",
+   "zyx_mesh": [
+    21316.798828125,
+    14590.6318359375,
+    17815.63671875
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 409,
+   "kinds": "off_ridge+winding",
+   "score": 44.6395,
+   "row": 1038.0,
+   "col": 1540.0,
+   "zyx": [
+    27991.45,
+    14666.22,
+    16645.81
+   ],
+   "W": "1",
+   "blind": "B46",
+   "zyx_mesh": [
+    27991.451171875,
+    14666.220703125,
+    16645.810546875
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 494,
+   "kinds": "off_ridge+winding",
+   "score": 43.9415,
+   "row": 348.0,
+   "col": 176.0,
+   "zyx": [
+    14698.38,
+    16982.22,
+    12522.21
+   ],
+   "W": "1",
+   "blind": "B34",
+   "zyx_mesh": [
+    14698.3779296875,
+    16982.22265625,
+    12522.208984375
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 442,
+   "kinds": "off_ridge+winding",
+   "score": 40.7841,
+   "row": 818.0,
+   "col": 682.0,
+   "zyx": [
+    23814.73,
+    10105.4,
+    8447.1
+   ],
+   "W": "1",
+   "blind": "B18",
+   "zyx_mesh": [
+    23814.728515625,
+    10105.4033203125,
+    8447.09765625
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 354,
+   "kinds": "off_ridge+winding",
+   "score": 96.8501,
+   "row": 508.0,
+   "col": 26.0,
+   "zyx": [
+    17779.82,
+    16297.28,
+    15309.2
+   ],
+   "W": "-1",
+   "blind": "B07",
+   "zyx_mesh": [
+    17779.822265625,
+    16297.283203125,
+    15309.1962890625
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 360,
+   "kinds": "off_ridge+winding",
+   "score": 69.0542,
+   "row": 848.0,
+   "col": 672.0,
+   "zyx": [
+    24422.73,
+    8891.31,
+    12195.22
+   ],
+   "W": "1",
+   "blind": "B31",
+   "zyx_mesh": [
+    24422.73046875,
+    8891.310546875,
+    12195.224609375
+   ]
+  },
+  {
+   "stratum": "mid",
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 86,
+   "kinds": "off_ridge+winding",
+   "score": 29.566,
+   "row": 790.0,
+   "col": 504.0,
+   "zyx": [
+    23648.48,
+    14797.54,
+    16883.21
+   ],
+   "W": "-1",
+   "blind": "B27",
+   "zyx_mesh": [
+    23648.482421875,
+    14797.5400390625,
+    16883.2109375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 422.0,
+   "col": 282.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B06",
+   "zyx_mesh": [
+    16567.478515625,
+    15358.82421875,
+    9822.8359375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 758.0,
+   "col": 478.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B53",
+   "zyx_mesh": [
+    22658.40625,
+    10903.8388671875,
+    8892.1787109375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 288.0,
+   "col": 886.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B02",
+   "zyx_mesh": [
+    12897.6201171875,
+    10860.3974609375,
+    16121.013671875
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 200.0,
+   "col": 270.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B40",
+   "zyx_mesh": [
+    11685.4443359375,
+    16742.654296875,
+    10766.1865234375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w044",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260115000000-w044_2026011522/mesh/20260115000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 866.0,
+   "col": 746.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B14",
+   "zyx_mesh": [
+    23744.373046875,
+    8854.0634765625,
+    10888.376953125
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w044",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260115000000-w044_2026011522/mesh/20260115000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 660.0,
+   "col": 594.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B03",
+   "zyx_mesh": [
+    19728.6953125,
+    10838.9423828125,
+    8594.4189453125
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 866.0,
+   "col": 822.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B05",
+   "zyx_mesh": [
+    23852.123046875,
+    8364.1181640625,
+    12117.2919921875
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 430.0,
+   "col": 850.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B28",
+   "zyx_mesh": [
+    15411.39453125,
+    9657.6220703125,
+    12921.068359375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 552.0,
+   "col": 402.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B47",
+   "zyx_mesh": [
+    14573.0078125,
+    15564.435546875,
+    14990.5830078125
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 732.0,
+   "col": 698.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B25",
+   "zyx_mesh": [
+    17824.388671875,
+    13793.9990234375,
+    9462.5791015625
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 828.0,
+   "col": 1752.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B32",
+   "zyx_mesh": [
+    24128.330078125,
+    16570.634765625,
+    13905.7333984375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 296.0,
+   "col": 824.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B48",
+   "zyx_mesh": [
+    13416.00390625,
+    9389.2021484375,
+    10949.7490234375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 942.0,
+   "col": 246.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B13",
+   "zyx_mesh": [
+    26960.55078125,
+    10926.2470703125,
+    19185.314453125
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 414.0,
+   "col": 386.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B30",
+   "zyx_mesh": [
+    16702.02734375,
+    13424.267578125,
+    19011.009765625
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w023",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260311000000-w023_202603112281/mesh/20260311000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 250.0,
+   "col": 378.0,
+   "zyx": null,
+   "W": "",
+   "blind": "B08",
+   "zyx_mesh": [
+    8942.77734375,
+    16495.76953125,
+    13633.546875
+   ]
+  },
+  {
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 393,
+   "kinds": "off_ridge",
+   "score": 0.9284,
+   "row": 988.0,
+   "col": 202.0,
+   "zyx": [
+    27726.07,
+    10156.71,
+    18649.01
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C15",
+   "zyx_mesh": [
+    27726.07421875,
+    10156.71484375,
+    18649.01171875
+   ]
+  },
+  {
+   "seg": "w023",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260311000000-w023_202603112281/mesh/20260311000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 355,
+   "kinds": "off_ridge",
+   "score": 1.8883,
+   "row": 764.0,
+   "col": 942.0,
+   "zyx": [
+    18677.82,
+    10535.04,
+    15633.37
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C03",
+   "zyx_mesh": [
+    18677.82421875,
+    10535.04296875,
+    15633.3720703125
+   ]
+  },
+  {
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 526,
+   "kinds": "off_ridge",
+   "score": 11.7736,
+   "row": 1178.0,
+   "col": 194.0,
+   "zyx": [
+    26508.25,
+    11757.9,
+    17383.11
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C10",
+   "zyx_mesh": [
+    26508.25390625,
+    11757.90234375,
+    17383.109375
+   ]
+  },
+  {
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 954,
+   "kinds": "off_ridge",
+   "score": 1.7639,
+   "row": 818.0,
+   "col": 990.0,
+   "zyx": [
+    23246.36,
+    10338.38,
+    17415.11
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C20",
+   "zyx_mesh": [
+    23246.35546875,
+    10338.3818359375,
+    17415.11328125
+   ]
+  },
+  {
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 747,
+   "kinds": "off_ridge",
+   "score": 3.7575,
+   "row": 652.0,
+   "col": 272.0,
+   "zyx": [
+    20880.04,
+    14403.63,
+    10456.85
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C14",
+   "zyx_mesh": [
+    20880.044921875,
+    14403.6279296875,
+    10456.8466796875
+   ]
+  },
+  {
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1013,
+   "kinds": "off_ridge",
+   "score": 5.3862,
+   "row": 474.0,
+   "col": 1434.0,
+   "zyx": [
+    17461.65,
+    13785.75,
+    18872.86
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C19",
+   "zyx_mesh": [
+    17461.654296875,
+    13785.7451171875,
+    18872.861328125
+   ]
+  },
+  {
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1112,
+   "kinds": "off_ridge",
+   "score": 1.0447,
+   "row": 246.0,
+   "col": 506.0,
+   "zyx": [
+    12050.54,
+    13642.97,
+    8389.62
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C02",
+   "zyx_mesh": [
+    12050.5380859375,
+    13642.970703125,
+    8389.6171875
+   ]
+  },
+  {
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1089,
+   "kinds": "off_ridge",
+   "score": 1.2379,
+   "row": 394.0,
+   "col": 126.0,
+   "zyx": [
+    15549.13,
+    17145.43,
+    13498.96
+   ],
+   "W": "0",
+   "stratum": "kind_off_ridge",
+   "blind": "C18",
+   "zyx_mesh": [
+    15549.1259765625,
+    17145.43359375,
+    13498.958984375
+   ]
+  },
+  {
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 278,
+   "kinds": "off_ridge+phase_cut",
+   "score": 69.8875,
+   "row": 190.0,
+   "col": 814.0,
+   "zyx": [
+    12145.61,
+    11007.93,
+    11480.02
+   ],
+   "W": "1",
+   "stratum": "kind_phase_cut",
+   "blind": "C09",
+   "zyx_mesh": [
+    12145.6142578125,
+    11007.9306640625,
+    11480.015625
+   ]
+  },
+  {
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 636,
+   "kinds": "off_ridge+phase_cut",
+   "score": 5.4865,
+   "row": 1258.0,
+   "col": 382.0,
+   "zyx": [
+    27873.4,
+    14573.84,
+    14937.94
+   ],
+   "W": "0",
+   "stratum": "kind_phase_cut",
+   "blind": "C06",
+   "zyx_mesh": [
+    27873.396484375,
+    14573.837890625,
+    14937.935546875
+   ]
+  },
+  {
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 899,
+   "kinds": "off_ridge+phase_cut",
+   "score": 4.8506,
+   "row": 884.0,
+   "col": 1376.0,
+   "zyx": [
+    24596.55,
+    13936.22,
+    17711.85
+   ],
+   "W": "-1",
+   "stratum": "kind_phase_cut",
+   "blind": "C08",
+   "zyx_mesh": [
+    24596.55078125,
+    13936.2177734375,
+    17711.84765625
+   ]
+  },
+  {
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 186,
+   "kinds": "off_ridge+phase_cut",
+   "score": 7.9326,
+   "row": 750.0,
+   "col": 448.0,
+   "zyx": [
+    22935.77,
+    13915.9,
+    17631.64
+   ],
+   "W": "-1",
+   "stratum": "kind_phase_cut",
+   "blind": "C01",
+   "zyx_mesh": [
+    22935.7734375,
+    13915.904296875,
+    17631.640625
+   ]
+  },
+  {
+   "seg": "w049",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260318000000-w049_20260318/mesh/20260318000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 1380,
+   "kinds": "off_ridge+phase_cut",
+   "score": 1.2238,
+   "row": 74.0,
+   "col": 1184.0,
+   "zyx": [
+    9579.94,
+    10893.03,
+    17982.03
+   ],
+   "W": "-1",
+   "stratum": "kind_phase_cut",
+   "blind": "C11",
+   "zyx_mesh": [
+    9579.943359375,
+    10893.0283203125,
+    17982.02734375
+   ]
+  },
+  {
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 598,
+   "kinds": "off_ridge+phase_cut",
+   "score": 13.0571,
+   "row": 602.0,
+   "col": 646.0,
+   "zyx": [
+    19584.78,
+    9644.98,
+    11996.58
+   ],
+   "W": "-1",
+   "stratum": "kind_phase_cut",
+   "blind": "C05",
+   "zyx_mesh": [
+    19584.775390625,
+    9644.984375,
+    11996.5751953125
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w023",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260311000000-w023_202603112281/mesh/20260311000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 110.0,
+   "col": 354.0,
+   "zyx": null,
+   "W": "",
+   "blind": "C16",
+   "zyx_mesh": [
+    6127.86865234375,
+    16537.283203125,
+    13997.802734375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w037",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260310000000-w037_2026031015/mesh/20260310000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 182.0,
+   "col": 388.0,
+   "zyx": null,
+   "W": "",
+   "blind": "C12",
+   "zyx_mesh": [
+    11007.7041015625,
+    15205.4619140625,
+    9186.826171875
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w050",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260302000001-w050_2026030220/mesh/20260302000001-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 666.0,
+   "col": 78.0,
+   "zyx": null,
+   "W": "",
+   "blind": "C07",
+   "zyx_mesh": [
+    21571.88671875,
+    9037.60546875,
+    16573.310546875
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w027",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20250108000002-w027_2025010845/mesh/20250108000002-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 344.0,
+   "col": 594.0,
+   "zyx": null,
+   "W": "",
+   "blind": "C17",
+   "zyx_mesh": [
+    10526.408203125,
+    16396.396484375,
+    11248.4814453125
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w045",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260126000000-w045_2026012619/mesh/20260126000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 502.0,
+   "col": 752.0,
+   "zyx": null,
+   "W": "",
+   "blind": "C13",
+   "zyx_mesh": [
+    16660.494140625,
+    9337.798828125,
+    10881.7724609375
+   ]
+  },
+  {
+   "stratum": "control",
+   "seg": "w035",
+   "url": "https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139/segments/20260317000000-w035_2026031718/mesh/20260317000000-on-20260102150214-2.399um.tifxyz/",
+   "rank": 0,
+   "kinds": "",
+   "score": 0.0,
+   "row": 486.0,
+   "col": 394.0,
+   "zyx": null,
+   "W": "",
+   "blind": "C04",
+   "zyx_mesh": [
+    17504.712890625,
+    13306.185546875,
+    8924.421875
+   ]
+  }
+ ]
+}

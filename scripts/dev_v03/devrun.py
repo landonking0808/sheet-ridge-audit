@@ -3,15 +3,17 @@
 Usage: devrun.py TAG seg1 seg2 ...   -> dev/<TAG>/<seg>.json (+ labels npz)"""
 import sys, os, json, pickle, time, csv, copy
 import numpy as np
-sys.path.insert(0, '/tmp/vcdata/v03')
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "eval"))
+from _paths import DATA, DOCS, segment, W025  # $SRA_EVAL_DATA (see docs/eval/README.md)
+_sys.path.insert(0, DATA + '/v03')   # analysis_v02.py: git show 0b3578a:src/sheet_ridge_audit/analysis.py > $SRA_EVAL_DATA/v03/analysis_v02.py
 import analysis_v02 as A2
 from sheet_ridge_audit import analysis as A3
 tag = sys.argv[1]; segs = sys.argv[2:]
 PRM = eval(os.environ.get("PRM", "{}"))
-out = f'/tmp/vcdata/v03/dev/{tag}'; os.makedirs(out, exist_ok=True)
-review = [r for r in csv.DictReader(open('/tmp/vcdata/census/review.csv'))]
+out = f'{DATA}/v03/dev/{tag}'; os.makedirs(out, exist_ok=True)
+review = [r for r in csv.DictReader(open(DOCS + '/census/review.csv'))]
 for sname in segs:
-    d = pickle.load(open(f'/tmp/vcdata/v03/grids/{sname}.pkl', 'rb')); g = d['grid']
+    d = pickle.load(open(f'{DATA}/v03/grids/{sname}.pkl', 'rb')); g = d['grid']
     rec = {'seg': sname}
     for ver, A in (('v02', A2), ('v03', A3)):
         if ver == 'v02' and os.path.exists(f'{out}/{sname}.json') and tag != 'v02ref':

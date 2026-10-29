@@ -4,11 +4,13 @@ are sampled only where the mesh (position or normal) changed; elsewhere the clea
 profiles are reused (identical by construction). Period fixed to the clean run's."""
 import os, sys, copy, pickle, time
 import numpy as np
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "eval"))
+from _paths import DATA, DOCS, segment, W025  # $SRA_EVAL_DATA (see docs/eval/README.md)
 from sheet_ridge_audit import audit, open_field
 from sheet_ridge_audit.profiles import _local_period_fn
 from sheet_ridge_audit.tifxyz import read_tifxyz, grid_normals, grid_tangents
-OUT = '/tmp/vcdata/v03/grids'; PL = '/tmp/vcdata/v03/plants'
-SEG = '/tmp/vcdata/lasagna/segments/20250108000000-on-20260102150214-2.399um.tifxyz'
+OUT = DATA + '/v03/grids'; PL = DATA + '/v03/plants'
+SEG = segment(W025)
 field = open_field("lasagna", "PHerc0139", cache_mb=768)
 cp = f'{OUT}/w025_s1_clean.pkl'
 if not os.path.exists(cp):

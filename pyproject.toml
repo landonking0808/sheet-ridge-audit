@@ -10,6 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Landon W. King"}]
 requires-python = ">=3.9"
+keywords = ["vesuvius-challenge", "herculaneum", "tifxyz", "ome-zarr", "segmentation", "quality-control"]
 dependencies = [
   "numpy>=1.22",
   "scipy>=1.8",
@@ -21,6 +22,10 @@ dependencies = [
   "requests",
   "matplotlib",
 ]
+
+[project.urls]
+Homepage = "https://github.com/landonking-gif/sheet-ridge-audit"
+Issues = "https://github.com/landonking-gif/sheet-ridge-audit/issues"
 
 [project.optional-dependencies]
 test = ["pytest", "zarr>=2.11,<3"]

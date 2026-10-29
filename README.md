@@ -1,38 +1,243 @@
 # sheet-ridge-audit
 
-Audit Vesuvius Challenge **tifxyz** segments for places where the trace
-**leaves the papyrus sheet** or **switches to a neighbouring sheet**.
+Find the places where a Vesuvius Challenge **tifxyz** segment **leaves its
+papyrus sheet** or **switches to a neighbouring sheet**, and rank them for a
+human to check.
 
-The tool samples the public **Lasagna** prediction (`cos`, from
+**Why.** A sheet switch is the costliest tracing error: everything unrolled
+beyond it is read from the wrong wrap. Abrupt switches leave a geometric
+fingerprint (a step, a stretched edge, a self-intersection) that existing
+geometry checkers find well. A **gradual** switch does not: the mesh drifts
+smoothly across the gap onto the next sheet and stays smooth, so a
+geometry-only checker sees nothing. This tool looks at the volume instead.
+It samples the public **Lasagna** sheet prediction (`cos`, from
 [ScrollPrize/villa `lasagna`](https://github.com/ScrollPrize/villa)) along the
-surface normal at every grid vertex. `cos` is +1 on a sheet and -1 midway
-between two sheets, with one full period per sheet spacing. From it the tool
-reads two things per vertex:
+surface normal at every grid vertex and asks two questions:
 
-* **c0**, the value at the mesh: is the trace on a ridge (sheet) or in a gap?
-* the **phase**: how far, in sheet periods, the mesh sits from its nearest
-  ridge. A gradual sheet switch, which geometry-only checkers cannot see (the
-  mesh stays smooth), is a band where c0 < 0 (the trace crosses the gap)
-  across which the phase, unwrapped locally, steps by one whole period. v0.3
-  flags that band, the **seam** where the switch happens, as a `winding`
+* **Is the mesh on a sheet?** `c0` = Lasagna cos at the mesh (+1 on a sheet,
+  -1 midway between two sheets). A band with c0 < 0 is an `off_ridge`
   suspect.
+* **Did it change sheets?** The phase of the profile says how far, in sheet
+  periods, the mesh sits from its nearest ridge. Unwrapped over the grid, it
+  steps by one whole period where the trace crosses onto the next sheet. That
+  band is a **`winding` seam**.
 
-An abrupt switch (the trace jumps a whole sheet between two neighbouring
-vertices) keeps the phase mod one period, so the field cannot see it. v0.3
-adds a cheap geometry cue for it, `geom_step`, after the MIT-licensed
-geometry checkers tifxyz-doctor and tifxyz-repair (see *Credits*). The tool
-thus covers both gradual (Lasagna) and abrupt (geometry) switches.
+An abrupt switch (a whole sheet jumped between two neighbouring vertices)
+keeps the phase mod one period, so the field cannot see it. Since v0.3 the
+tool therefore also has a cheap geometry cue for abrupt jumps,
+**`geom_step`**, after the MIT-licensed geometry checkers tifxyz-doctor and
+tifxyz-repair. Gradual switches come from the field, abrupt ones from the
+geometry.
 
-Raw CT can be used instead (`--backend ct`) for scans without a Lasagna
-prediction, but at 2.4-8 um it is a much weaker signal (see *Limitations*).
+Output: a ranked suspect list (CSV, JSON, VC3D point collection), overview
+maps and CT cross-sections of the top suspects. Raw CT can be used instead of
+Lasagna (`--backend ct`) for scans without a prediction, but it is a much
+weaker signal.
 
-Status: **v0.3 (Oct 2026)**. It runs end to end on real public segments. The
-thresholds are calibrated on planted switches in a real segment and checked
-against a small, blind, AI-made review of real flags on PHerc0139 (a
-development set), not on expert-labelled real switches. `docs/RESULTS.md` has
-the timings, the calibration and the v0.3 development numbers.
+**Status: v0.3.0 (October 2026), a research tool.** It runs end to end on
+real public segments in a few minutes. Its thresholds are calibrated on
+planted switches. Its precision on real data has only been measured with a
+small, blind **AI-agent** review of 2-D CT slices on one scroll, not with
+expert labels; see *Evaluation* before trusting a flag.
 
-### What changed in v0.3
+## Install
+
+```bash
+pip install git+https://github.com/landonking-gif/sheet-ridge-audit
+sheet-ridge-audit --help
+```
+
+Python >= 3.9; pulls numpy, scipy, tifffile, imagecodecs, numcodecs, fsspec,
+aiohttp, requests, matplotlib. No GPU, no torch. For development:
+
+```bash
+git clone https://github.com/landonking-gif/sheet-ridge-audit && cd sheet-ridge-audit
+pip install -e '.[test]'    # + pytest, zarr (tests only)
+pytest -q                   # offline, 40 tests, about 1-2 min
+```
+
+Nothing is downloaded up front. Only the field chunks along the mesh are
+streamed, into a memory cache bounded by `--cache-mb`. Nothing large is
+written to disk.
+
+## Quickstart on a real public segment
+
+PHerc0139, segment `w025`, traced natively on scan `20260102150214` (2.399 um),
+the same scan the Lasagna prediction was made on:
+
+```bash
+BASE=https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139
+SEG=$BASE/segments/20250108000000-w025_2025010863/mesh/20250108000000-on-20260102150214-2.399um.tifxyz
+mkdir -p w025.tifxyz && for f in x.tif y.tif z.tif meta.json; do curl -s -o w025.tifxyz/$f $SEG/$f; done   # 22 MB
+
+sheet-ridge-audit audit w025.tifxyz --scroll PHerc0139 --out out/w025      # stride 1 (default)
+```
+
+What to expect (a verification run of v0.3.0 from a fresh `pip install`, on
+a shared 2-vCPU host at load average about 11): 1,552,672 vertices sampled
+in 214 s (572 MB of Lasagna `cos` and 98 MB of `grad_mag` streamed), 99 s of
+analysis, 71 s rendering 10 CT cross-sections; 553 s wall clock in all. The
+same segment took 138 s with v0.2 on the same host when it was less loaded;
+v0.3's analysis costs about 2 s more on identical inputs. Result: period
+71.5 voxels, 86.9% of vertices on a ridge, **911 suspects covering 11.66% of
+the surface**: 179 winding seams, 5 geometric steps, the rest off-ridge
+bands; the largest is 82 period^2. (`docs/example/` was rendered from stored
+float16 profiles of the same segment and has 180 seams; the top suspects are
+the same.) `--stride 2` (every 2nd node, about a quarter of the sampling)
+is fine for a survey, but small, steep switches need stride 1 to get their
+winding sign right (see `docs/RESULTS.md`).
+
+* `--scroll PHerc0139` selects the Lasagna run from the built-in registry. It
+  covers all 22 public Lasagna outputs (`sheet-ridge-audit lasagna-registry`).
+  `--lasagna <manifest URL>` takes any `*.lasagna.json` instead. If the segment
+  folder is named `...-on-<scan id>-...` and that scan is in the registry, the
+  backend is chosen for you.
+* Cross-sections are drawn from the raw CT of the same scan. Its URL comes from
+  the registry; override it with `--xsec-volume`. They are sampled at OME level
+  2 on 2.4 um scans and level 1 otherwise (`--xsec-level`).
+* `--upsample auto` (the default) densifies grids whose nodes are more than
+  1/3 period apart. On the 8.64 um scans, where the period is about 15
+  voxels, it upsamples 4x.
+
+Other scans:
+
+```bash
+# Scroll 1 (PHercParis4), native on its Lasagna scan
+sheet-ridge-audit audit SEG.tifxyz --scroll PHercParis4 --stride 2 --out out/s1
+# raw CT only (weak; no Lasagna for this scan)
+sheet-ridge-audit audit SEG.tifxyz --backend ct --volume https://.../scan.zarr --level 2 --out out/ct   # level 1 streams ~5x more
+# many segments -> ranking.csv
+sheet-ridge-audit batch segments/ --scroll PHerc0139 --stride 2 --out out/batch
+```
+
+## Outputs (`--out DIR`)
+
+A real example (the quickstart run on w025, trimmed to the top 40 suspects)
+is in [`docs/example/`](docs/example/).
+
+**`overview.png`**: two maps over the tifxyz grid. Left: c0 (blue = on a
+ridge, red = in a gap), with every suspect shaded: green = winding seam (the
+trace crosses onto another sheet there), magenta = `geom_step`, dark =
+off-ridge only. Right: the unwrapped winding offset (context: 0 = the
+segment's dominant sheet, +-1 = a neighbouring sheet; plateaus are not
+flagged by themselves, only their seams). The top 15 suspects are outlined
+in yellow and numbered by rank.
+
+![overview of w025](docs/example/overview.png)
+
+**`xsec_NNN.png`**: for each of the top K suspects, two CT slices through
+its centre, orthogonal to the surface (along the grid's u and v). The mesh
+trace is cyan (magenta inside the suspect), Lasagna ridges (cos = 0.7) red.
+This is where you decide whether a flag is real. Below, w025 suspect #1
+(`off_ridge+winding`, offset -1).
+
+![cross-section of suspect 1](docs/example/xsec_001.png)
+
+| file | what it is |
+|---|---|
+| `overview.png` | The two maps above. |
+| `c0.png`, `winding.png`, `quality.png` | The same maps unsmoothed, plus the phase coherence ([`winding.png`](docs/example/winding.png)). |
+| `xsec_NNN.png` | CT cross-sections of the top K suspects (`--top-k`; [1](docs/example/xsec_001.png), [2](docs/example/xsec_002.png), [3](docs/example/xsec_003.png)). |
+| `suspects.csv` | One row per suspect: `id` (rank), `kinds` (`off_ridge`, `winding`, `geom_step`), `score`, `severity`, area (vertices, voxel^2, period^2), centre `row`/`col` (original tifxyz grid) and `z`/`y`/`x` (level-0 voxels), bbox, `mean_c0`, `min_c0`, `winding_offset` (across a seam or step: the smaller side is this many sheets further along the mesh normal than the larger side), `max_abs_offset_cycles`, `n_residues`, `extent_periods`, `confidence` (mean phase coherence), `step_periods` (size of a geometric step). [Example](docs/example/suspects_top40.csv). |
+| `summary.json` | Segment info, field description (manifest, chunks and MB fetched), parameters, the pilot period measurement, segment scores (`on_ridge_fraction`, `winding_seam_fraction`, `geom_step_fraction`, `suspect_area_fraction`, ...), the suspect list, and timings. [Example](docs/example/summary.json). |
+| `suspects_vc3d_points.json` | A VC3D point collection, one point per suspect centre (point id = rank), in the format of VC3D `PointCollections` (`volume-cartographer/core/src/PointCollections.cpp`, version `"1"`; `p` = `[x, y, z]`). Load it in VC3D to jump to each suspect. [Example](docs/example/suspects_vc3d_points_top40.json). |
+
+## Evaluation
+
+Full write-ups, data tables, figures and the scripts that made them are in
+[`docs/eval/`](docs/eval/README.md) and [`docs/RESULTS.md`](docs/RESULTS.md).
+Read the version tags: the census and baseline studies were run on **v0.2**;
+the **v0.3** numbers are **development** numbers on the same data (used while
+building v0.3, so optimistic). No result here uses expert labels.
+
+**1. Labelled Scroll 4 patches** (will's good/bad patches, 350 + 350 random,
+not made by us; [details](docs/eval/will/RESULTS.md)). This scores the
+*signal* the tool uses, per patch, against geometry. The Lasagna signal
+separates good from bad only weakly, and **no better than a geometry-only
+score**:
+
+| score (higher = bad) | AUC [95% CI], 625 patches |
+|---|---|
+| Lasagna: fraction of vertices with c0 < 0 | **0.633 [0.589-0.676]** |
+| geometry: max angle between neighbouring normals | 0.624 [0.580-0.670] |
+| raw CT, best score | 0.580 [0.534-0.625] |
+| Lasagna + geometry, 5-fold CV logistic (699 patches) | 0.650 [0.610-0.692] |
+
+Most "bad" patches sit on a Lasagna ridge (median c0 0.74 vs 0.79 for good),
+so "bad" in this set mostly does not mean "off the sheet"; it is a weak test
+for this tool, in either direction.
+
+**2. Census and blind review, PHerc0139, v0.2** ([details](docs/eval/census/RESULTS.md)).
+All 38 segments audited (stride 2). 53 suspects and 21 unflagged controls
+from 8 segments were rendered as CT cross-sections and labelled **blind by
+an AI agent (Claude), not by an expert**: REAL = the mesh visibly leaves its
+sheet, PLAUSIBLE = ambiguous (touching layers, junctions), FALSE = on one
+clean sheet.
+
+| v0.2, defaults | result (Wilson 95%) |
+|---|---|
+| precision, REAL | 17/53 = **0.32** [0.21, 0.45] |
+| precision, REAL + PLAUSIBLE | 38/53 = **0.72** [0.58, 0.82] |
+| unflagged controls that were REAL | **0/21** [0.00, 0.15] (2/21 PLAUSIBLE) |
+| flagged area per segment, median | 0.37 (all 38 segments) |
+
+**3. v0.3 development numbers** (same PHerc0139 data, re-analysed with v0.2
+and v0.3 on identical sampled profiles; [details](docs/RESULTS.md)).
+
+| measure | v0.2 | v0.3 |
+|---|---|---|
+| flagged area per segment, median of 21 census segments (stride 2) | 0.343 | **0.206** |
+| reviewed v0.2 flags still flagged | 53/53 | 31/53 |
+| ... of which REAL | 0.32 [0.21, 0.45] | 0.42 [0.26, 0.59] |
+| ... REAL + PLAUSIBLE | 0.72 [0.58, 0.82] | 0.77 [0.60, 0.89] |
+| REAL review items lost | | 4 of 17 |
+| unflagged controls now flagged | 0/21 | 0/21 |
+| P(a REAL item ranks above a FALSE one) | 0.56 | 0.60 (noise) |
+| clean w025 flag area (stride 1) | 12.4% | 11.7% |
+
+The precision gain is inside the intervals, and it is measured on v0.2's
+flags: v0.3's own new flags (its seams) have **not** been reviewed. A
+held-out review on PHercParis4 is the real test and is not reported here.
+
+**4. Planted switches vs geometry checkers** (PHerc0139 w025, 20 plants per
+type, same 20 sites; detection = >= 3 new flagged nodes in the plant region;
+[details](docs/eval/baseline/RESULTS.md)). Tools at their **defaults**;
+"iso" plants are near-isometric (a tracer growing a grid onto the next sheet
+leaves little stretch); "steep" = a one-node ramp, i.e. an abrupt jump.
+
+| tool (default settings) | clean flag area | gradual 1 period | gradual, iso | steep 1 period | half period | half, iso |
+|---|---|---|---|---|---|---|
+| sheet-ridge-audit v0.2 | 12.42% | **20/20** | **20/20** | 16/20 | **19/20** | **19/20** |
+| sheet-ridge-audit v0.3 (dev) | 11.66% | **20/20** | **20/20** | **20/20** | **19/20** | **19/20** |
+| tifxyz-doctor, coherent normal step | **0.00%** | 1/20 | 1/20 | **20/20** | 0/20 | 1/20 |
+| tifxyz-doctor, all cues | 0.07% | 5/20 | 2/20 | **20/20** | 2/20 | 2/20 |
+| tifxyz-surgeon, sheet_switch + grid_tear | 0.02% | 0/20 | 0/20 | 14/20 | 0/20 | 0/20 |
+| tifxyz-surgeon, all detectors | 0.83% | 3/20 | 3/20 | 15/20 | 3/20 | 3/20 |
+| tifxyz-repair, self_proximity | **0.00%** | 1/20 | 2/20 | 0/20 | 1/20 | 1/20 |
+| tifxyz-repair, self_proximity + stretch | 0.03% | 7/20 | 2/20 | **20/20** | 2/20 | 1/20 |
+| windcheck, self-intersection | 0.01% | 4/20 | 4/20 | 4/20 | 1/20 | 2/20 |
+
+v0.3 row: gradual/half plants from the v0.3 plant module (`iso`, the same
+method as the study's iso2) and the study's own v0.2-style plants; steep:
+20/20 on both. Where the geometry checkers **beat us**:
+
+* **False-flag budget.** They flag 0.00-0.83% of a clean segment; this tool
+  flags 11.7-12.4%. That area is unlabelled (an upper bound on false flags,
+  not a measured FP rate), but it is 15-100x more to look at.
+* **Abrupt jumps (v0.2).** tifxyz-doctor's normal step and tifxyz-repair's
+  stretch cells found 20/20 steep plants at about 0% clean area; v0.2 found
+  16/20 and never with the right winding sign. v0.3 adopted their cues
+  (`geom_step`) and finds 20/20 (dev).
+* **A tuned stretch threshold.** tifxyz-repair's stretch cue lowered from
+  1.5x to 1.1x finds 20/20 of the raw gradual plants at 0.17% clean area,
+  because those plants stretch edges. On the near-isometric plants the best
+  stretch setting found 17/20 at 8.6% clean area vs this tool's 20/20 at
+  6.4% (both tuned on the test plants): **not a significant difference**.
+
+These are synthetic plants in one real segment. Recall on real, labelled
+switches is not measured for any tool.
+
+## What changed in v0.3
 
 The v0.2 census of all 38 PHerc0139 segments and a baseline comparison with
 four geometry checkers found three weaknesses. v0.3 changes:
@@ -67,98 +272,6 @@ four geometry checkers found three weaknesses. v0.3 changes:
   `geom_step_fraction`, `n_winding_seams`, `n_geom_steps`.
   `winding_change_fraction` is now the share of W != 0 in the map, which is
   context only.
-
-**Development-set numbers, v0.2 -> v0.3** (all PHerc0139, used while building
-v0.3, so optimistic; PHercParis4 is held out for an independent test; labels
-are a blind AI review from 2-D CT slices). Details in `docs/RESULTS.md`.
-
-| measure | v0.2 | v0.3 |
-|---|---|---|
-| flagged area per segment, median of 21 census segments (stride 2) | 0.343 | **0.206** |
-| reviewed v0.2 flags still flagged | 53/53 | 31/53 |
-| ... of which REAL (Wilson 95%) | 0.32 [0.21, 0.45] | 0.42 [0.26, 0.59] |
-| ... REAL + PLAUSIBLE | 0.72 [0.58, 0.82] | 0.77 [0.60, 0.89] |
-| REAL review items lost | | 4 of 17 |
-| unflagged controls now flagged | 0/21 | 0/21 |
-| near-isometric plants, w025 stride 1: gradual / steep / half detected | 20 / 16 / 19 of 20 | 20 / **20** / 19 of 20 |
-| ... with the right kind and sign | 19 / 9 / 19 | 16 / **18** / 19 |
-| half-period plants mislabelled `winding` | 15/20 | 6/20 |
-| clean w025 flag area (stride 1) | 12.4% | 11.7% |
-
-The ranking did not measurably put REAL flags above FALSE ones (P = 0.56 ->
-0.60 on few pairs), and v0.3's own new flags have not been reviewed.
-
-## Install
-
-```bash
-git clone <this repo> && cd sheet-ridge-audit
-pip install -e .            # Python >= 3.9; numpy, scipy, tifffile, imagecodecs, numcodecs, fsspec, aiohttp, matplotlib
-pip install -e .[test]      # + pytest, zarr (tests only)
-pytest -q                   # offline, ~10 s
-```
-
-Nothing is downloaded up front. Only the field chunks along the mesh are
-streamed, into a memory cache bounded by `--cache-mb`. Nothing large is written
-to disk.
-
-## Quickstart on a real public segment
-
-PHerc0139, segment `w025`, traced natively on scan `20260102150214` (2.399 um),
-the same scan the Lasagna prediction was made on:
-
-```bash
-BASE=https://vesuvius-challenge-open-data.s3.amazonaws.com/PHerc0139
-SEG=$BASE/segments/20250108000000-w025_2025010863/mesh/20250108000000-on-20260102150214-2.399um.tifxyz
-mkdir -p w025.tifxyz && for f in x.tif y.tif z.tif meta.json; do curl -s -o w025.tifxyz/$f $SEG/$f; done   # 22 MB
-
-sheet-ridge-audit audit w025.tifxyz --scroll PHerc0139 --out out/w025
-```
-
-On the 2-vCPU test host v0.2 took **138 s** for 1.55 million vertices: 88 s
-of sampling (570 MB of Lasagna `cos` streamed), 25 s of analysis, and 25 s of
-rendering, including 6 CT cross-sections at OME level 2. v0.3 samples the same
-way; its analysis takes about 2 s longer (17 s vs 15 s measured on the same
-stored profiles). v0.3 finds 911 suspects covering 11.7% of the surface (v0.2:
-866, 12.4%): 180 winding seams, 5 geometric steps, the rest off-ridge bands;
-the largest is 82 period^2. `--stride 2` (every 2nd node; about 1 min) is fine
-for a survey, but small, steep switches need stride 1 to get their winding
-sign right (see `docs/RESULTS.md`).
-
-* `--scroll PHerc0139` selects the Lasagna run from the built-in registry. It
-  covers all 22 public Lasagna outputs (`sheet-ridge-audit lasagna-registry`).
-  `--lasagna <manifest URL>` takes any `*.lasagna.json` instead. If the segment
-  folder is named `...-on-<scan id>-...` and that scan is in the registry, the
-  backend is chosen for you.
-* Cross-sections are drawn from the raw CT of the same scan. Its URL comes from
-  the registry; override it with `--xsec-volume`. They are sampled at OME level
-  2 on 2.4 um scans and level 1 otherwise (`--xsec-level`).
-* `--upsample auto` (the default) densifies grids whose nodes are more than
-  1/3 period apart. On the 8.64 um scans, where the period is about 15
-  voxels, it upsamples 4x.
-
-Other scans:
-
-```bash
-# Scroll 1 (PHercParis4), native on its Lasagna scan
-sheet-ridge-audit audit SEG.tifxyz --scroll PHercParis4 --stride 2 --out out/s1
-# raw CT only (weak; no Lasagna for this scan)
-sheet-ridge-audit audit SEG.tifxyz --backend ct --volume https://.../scan.zarr --level 2 --out out/ct   # level 1 streams ~5x more
-# many segments -> ranking.csv
-sheet-ridge-audit batch segments/ --scroll PHerc0139 --stride 2 --out out/batch
-```
-
-## Outputs (`--out DIR`)
-
-| file | what it is |
-|---|---|
-| `overview.png` | Two panels over the tifxyz grid. Left: c0 (blue = on a ridge, red = in a gap). Every suspect is shaded: green = winding seam (the trace crosses onto another sheet there), magenta = `geom_step`, dark = off-ridge only. Right: the unwrapped winding offset (context: 0 = the segment's dominant sheet, +-1 = a neighbouring sheet; plateaus are not flagged by themselves). In both panels the top 15 suspects are outlined in yellow and numbered by rank. |
-| `c0.png`, `winding.png`, `quality.png` | The same maps unsmoothed, plus the phase coherence. |
-| `suspects.csv` | One row per suspect: `id` (rank), `kinds` (`off_ridge`, `winding`, `geom_step`), `score`, `severity`, area (vertices, voxel^2, period^2), centre `row`/`col` (original tifxyz grid) and `z`/`y`/`x` (level-0 voxels), bbox, `mean_c0`, `min_c0`, `winding_offset` (across a seam or step: the smaller side is this many sheets further along the mesh normal than the larger side), `max_abs_offset_cycles`, `n_residues`, `extent_periods`, `confidence` (mean phase coherence), `step_periods` (size of a geometric step). |
-| `summary.json` | Segment info, field description (manifest, chunks and MB fetched), parameters, the pilot period measurement, segment scores (`on_ridge_fraction`, `winding_change_fraction`, `suspect_area_fraction`, ...), the suspect list, and timings. |
-| `xsec_NNN.png` | For the top K suspects, two CT slices through the suspect centre, orthogonal to the surface (along the grid's u and v directions). The mesh trace is drawn in cyan, or magenta inside the suspect. Lasagna ridge lines (cos = 0.7) are drawn in red. |
-| `suspects_vc3d_points.json` | A VC3D point collection, one point per suspect centre (point id = rank). This is the format of VC3D `PointCollections` (`volume-cartographer/core/src/PointCollections.cpp`, version `"1"`; `p` = `[x, y, z]`). |
-
-A worked example of real output is in [`docs/example/`](docs/example/).
 
 ## What it computes
 
@@ -281,11 +394,11 @@ calibration (baseline, plants, threshold sweep).
   steeply than about 45 degrees relative to the sheets, the profile along the
   tilted normal is distorted. Such switches are usually still flagged
   `off_ridge`.
-* **Many real-data flags.** v0.3 halves the flagged area on PHerc0139 (median
-  per segment 0.34 -> 0.17 on 21 census segments), but that is still a lot:
+* **Many real-data flags.** v0.3 cuts the flagged area on PHerc0139 (median
+  per segment 0.34 -> 0.21 on 21 census segments), but that is still a lot:
   most of it is now off-ridge bands, and a segment has hundreds of winding
   seams. Use `--c0-thr` / `--min-area` to tighten.
-* **The ranking is not validated.** On the 29 reviewed flags that v0.3 still
+* **The ranking is not validated.** On the 31 reviewed flags that v0.3 still
   flags, its score did not reliably put the REAL ones above the FALSE ones
   (see `docs/RESULTS.md`; the sample is far too small to tune on). Treat the
   rank as a rough order and look at more than the top few.
@@ -311,31 +424,53 @@ calibration (baseline, plants, threshold sweep).
   development set. Recall on real switches is not measured, and the
   precision numbers are rough (wide intervals, not expert labels).
 
-## Data and credits
 
-* **Lasagna** predictions: ScrollPrize/villa `lasagna` (model
-  `20260419180421`), published by the Vesuvius Challenge. This package only
-  reads the outputs, and its decode was checked against villa `main` @
-  `322cb0899ac9` (`preprocess_cos_omezarr.py`, `fit_data.py`,
+## Credits
+
+* **Lasagna** sheet predictions: [ScrollPrize/villa](https://github.com/ScrollPrize/villa)
+  `lasagna` (model `20260419180421`), published by the Vesuvius Challenge.
+  This package only reads the outputs; its decode was checked against villa
+  `main` @ `322cb0899ac9` (`preprocess_cos_omezarr.py`, `fit_data.py`,
   `normal_encoding.py`).
-* tifxyz format: VC3D / `ScrollPrize/villa` (`vesuvius.tifxyz` is the official
-  Python API). This package ships a small compatible reader.
-* The `geom_step` cue re-implements, in a few lines, the cues of two
-  MIT-licensed geometry checkers: the *coherent normal step* of
-  **tifxyz-doctor** (aviad12g/tifxyz-doctor @ `5ca0444fb318`, default ratio
-  0.25) and the *stretch* cells of **tifxyz-repair** (Nieuwlaar/tifxyz-repair
-  @ `4d6c98d95b71`, 1.5x the grid spacing). Their code is not copied; their
-  idea and default thresholds are used. In the v0.2 baseline study, these two
-  cues found 20/20 abrupt plants at about 0% clean flag area, which is why
-  they are here.
-* The near-isometric plant method comes from the v0.2 baseline study's
-  `make_iso2_plants.py` (this project).
-* Volumes and segments: Vesuvius Challenge open data
-  (`s3://vesuvius-challenge-open-data`, `dl.ash2txt.org`), CC BY-NC 4.0.
-  Nothing from the data is redistributed here except the small derived
-  example figures in `docs/example/`. Scroll 1-4 data: EduceLab-Scrolls
-  (Parsons et al. 2023, arXiv:2304.02084).
+* **tifxyz format**: VC3D / volume-cartographer in ScrollPrize/villa, and the
+  official Python API `vesuvius.tifxyz`. This package ships a small
+  compatible reader. The VC3D point-collection output follows
+  `volume-cartographer/core/src/PointCollections.cpp`.
+* **tifxyz-doctor** ([aviad12g/tifxyz-doctor](https://github.com/aviad12g/tifxyz-doctor)
+  @ `5ca0444fb318`, MIT) and **tifxyz-repair**
+  ([Nieuwlaar/tifxyz-repair](https://github.com/Nieuwlaar/tifxyz-repair)
+  @ `4d6c98d95b71`, MIT): the `geom_step` cue re-implements, in a few lines,
+  tifxyz-doctor's *coherent normal step* (default ratio 0.25) and
+  tifxyz-repair's *stretch* cells (1.5x the grid spacing). Their code is not
+  copied; their idea and default thresholds are used.
+* **tifxyz-surgeon** ([enisme/tifxyz-surgeon](https://github.com/enisme/tifxyz-surgeon))
+  and **windcheck** ([joe-carr-data/windcheck](https://github.com/joe-carr-data/windcheck)),
+  both MIT, were compared against in the baseline study (pinned commits in
+  [`docs/eval/baseline/RESULTS.md`](docs/eval/baseline/RESULTS.md)); no code
+  from them is used.
+* **will**'s labelled Scroll 4 good/bad patches (`dl.ash2txt.org/community-uploads/will/`)
+  were used for the patch evaluation; they are read remotely, not
+  redistributed.
+* The near-isometric plant method comes from this project's v0.2 baseline
+  study (`scripts/eval/baseline/make_iso2_plants.py`).
+
+## Data license
+
+The scroll volumes, segments and Lasagna predictions are Vesuvius Challenge
+open data (`s3://vesuvius-challenge-open-data`, `dl.ash2txt.org`), licensed
+**CC BY-NC 4.0**; Scroll 1-4 data: EduceLab-Scrolls (Parsons et al. 2023,
+arXiv:2304.02084). **None of that data is redistributed here.** The tool and
+the evaluation scripts stream or download it from the public bucket when run.
+The only derived pieces in this repository are small figures and tables
+(`docs/example/`, `docs/eval/`: CT cross-section images, maps, per-segment
+and per-patch statistics), which remain subject to the data's
+non-commercial terms. The MIT license below covers the code only.
+
+## Authorship
+
+Written by Landon W. King with King AI, his own system of AI coding agents,
+under his direction.
 
 ## License
 
-MIT, (c) 2026 Landon W. King.
+MIT, (c) 2026 Landon W. King. See [LICENSE](LICENSE).

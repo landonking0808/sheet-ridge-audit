@@ -5,3 +5,5 @@ sra_out/
 sra_batch/
 *.zarr/
 /runs/
+sra-eval-data/
+build/

@@ -8,7 +8,7 @@
 
 **Everything in this section is a development number.** The data used to
 build and check v0.3 are all from PHerc0139: the v0.2 census review labels
-(53 suspects and 21 controls, `/tmp/vcdata/census/RESULTS_census.md`) and the
+(53 suspects and 21 controls, [`docs/eval/census/RESULTS.md`](eval/census/RESULTS.md)) and the
 w025 plants of the v0.2 baseline study. Choices were made while looking at
 them, so they are optimistic. **PHercParis4 was not touched**: it is held out
 for a later, independent review. The labels are a blind visual review by an
@@ -325,5 +325,8 @@ What this shows:
 * On will's labelled Scroll 4 patches, no v0.1 metric beat chance (AUC
   0.45-0.58).
 
-v0.2 replaces that detector. The labelled-patch evaluation has not been
-re-run with v0.2. An independent evaluation is in progress elsewhere.
+v0.2 replaces that detector. The labelled-patch evaluation was not re-run
+with the v0.2/v0.3 detector; a separate evaluation of the underlying Lasagna
+signal on the same kind of labels (350 + 350 of will's patches) is in
+[`docs/eval/will/RESULTS.md`](eval/will/RESULTS.md): AUC 0.633, about the same
+as a geometry-only score.

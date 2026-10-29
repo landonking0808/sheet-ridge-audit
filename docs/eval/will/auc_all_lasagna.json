@@ -1,0 +1,180 @@
+{
+ "las_neg_median_c0": {
+  "auc": 0.5921,
+  "ci95": [
+   0.5496,
+   0.634
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "las_frac_c0_lt0": {
+  "auc": 0.6173,
+  "ci95": [
+   0.5761,
+   0.6593
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "las_frac_c0_lt03": {
+  "auc": 0.6084,
+  "ci95": [
+   0.5677,
+   0.6494
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "las_largest_neg_cc": {
+  "auc": 0.6128,
+  "ci95": [
+   0.5721,
+   0.6543
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "las_peak_circvar": {
+  "auc": 0.6113,
+  "ci95": [
+   0.5697,
+   0.6533
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "las_peak_absoff": {
+  "auc": 0.57,
+  "ci95": [
+   0.5269,
+   0.6103
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "geo_max_normal_angle": {
+  "auc": 0.6268,
+  "ci95": [
+   0.5863,
+   0.6666
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "geo_p95_normal_angle": {
+  "auc": 0.6024,
+  "ci95": [
+   0.5627,
+   0.6424
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "geo_mean_abs_curv": {
+  "auc": 0.5776,
+  "ci95": [
+   0.5349,
+   0.619
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "geo_edge_cv": {
+  "auc": 0.4653,
+  "ci95": [
+   0.4236,
+   0.5062
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "geo_neg_valid_frac": {
+  "auc": 0.5085,
+  "ci95": [
+   0.4661,
+   0.5513
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "geo_neg_n_valid": {
+  "auc": 0.4808,
+  "ci95": [
+   0.4387,
+   0.5242
+  ],
+  "n_bad": 350,
+  "n_good": 349
+ },
+ "spearman_lasfrac_geomax": 0.16936668248828285,
+ "cv5_logreg_lasagna_all": {
+  "auc": 0.6278,
+  "ci95": [
+   0.5851,
+   0.6682
+  ],
+  "features": [
+   "las_neg_median_c0",
+   "las_frac_c0_lt0",
+   "las_frac_c0_lt03",
+   "las_largest_neg_cc",
+   "las_peak_circvar",
+   "las_peak_absoff"
+  ]
+ },
+ "cv5_logreg_geometry_all": {
+  "auc": 0.6145,
+  "ci95": [
+   0.5738,
+   0.6555
+  ],
+  "features": [
+   "geo_max_normal_angle",
+   "geo_p95_normal_angle",
+   "geo_mean_abs_curv",
+   "geo_edge_cv",
+   "geo_neg_valid_frac",
+   "geo_neg_n_valid"
+  ]
+ },
+ "cv5_logreg_lasagna+geometry": {
+  "auc": 0.6499,
+  "ci95": [
+   0.6097,
+   0.6918
+  ],
+  "features": [
+   "las_neg_median_c0",
+   "las_frac_c0_lt0",
+   "las_frac_c0_lt03",
+   "las_largest_neg_cc",
+   "las_peak_circvar",
+   "las_peak_absoff",
+   "geo_max_normal_angle",
+   "geo_p95_normal_angle",
+   "geo_mean_abs_curv",
+   "geo_edge_cv",
+   "geo_neg_valid_frac",
+   "geo_neg_n_valid"
+  ]
+ },
+ "good_summary": {
+  "median_c0_median": 0.7912634795153626,
+  "median_c0_iqr": [
+   0.6674944547969706,
+   0.8587411371696485
+  ],
+  "frac_lt0_mean": 0.06538853223397031,
+  "share_patches_frac_lt0_gt02": 0.07449856733524356
+ },
+ "bad_summary": {
+  "median_c0_median": 0.7400484082196419,
+  "median_c0_iqr": [
+   0.6316788728847846,
+   0.8178421039028316
+  ],
+  "frac_lt0_mean": 0.06210001445104822,
+  "share_patches_frac_lt0_gt02": 0.05714285714285714
+ }
+}

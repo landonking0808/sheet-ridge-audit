@@ -1,6 +1,8 @@
 import json, glob, sys, numpy as np
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "eval"))
+from _paths import DATA, DOCS, segment, W025  # $SRA_EVAL_DATA (see docs/eval/README.md)
 tag = sys.argv[1]
-recs = [json.load(open(f)) for f in sorted(glob.glob(f'/tmp/vcdata/v03/dev/{tag}/*.json'))]
+recs = [json.load(open(f)) for f in sorted(glob.glob(f'{DATA}/v03/dev/{tag}/*.json'))]
 print('seg   area v02 -> v03   plateau v02 -> v03   n v02 -> v03  seams geom')
 for r in recs:
     a, b = r['v02'], r['v03']

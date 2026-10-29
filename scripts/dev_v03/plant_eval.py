@@ -4,13 +4,15 @@ v0.2 (git 0b3578a) and the working tree, on identical cached stride-1 profile gr
 import sys, json, math, pickle, os, types, time
 import numpy as np
 from scipy import ndimage as ndi
-sys.path.insert(0, '/tmp/vcdata/v03')
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "eval"))
+from _paths import DATA, DOCS, segment, W025  # $SRA_EVAL_DATA (see docs/eval/README.md)
+_sys.path.insert(0, DATA + '/v03')   # analysis_v02.py: git show 0b3578a:src/sheet_ridge_audit/analysis.py > $SRA_EVAL_DATA/v03/analysis_v02.py
 import analysis_v02 as A2
 from sheet_ridge_audit import analysis as A3
 from sheet_ridge_audit.plant import Plant, load_plants, score_plants
-S = json.load(open('/tmp/vcdata/baseline/work/sites.json'))
+S = json.load(open(DOCS + '/baseline/out/sites.json'))
 CROSS = ndi.generate_binary_structure(2, 1)
-G = '/tmp/vcdata/v03/grids'; PL = '/tmp/vcdata/v03/plants'
+G = DATA + '/v03/grids'; PL = DATA + '/v03/plants'
 vers = {'v02': A2, 'v03': A3}
 which = sys.argv[1].split(',') if len(sys.argv) > 1 else ['v02', 'v03']
 names = sys.argv[2].split(',') if len(sys.argv) > 2 else ['gradual_1p_iso', 'steep_1p_iso', 'half_p_iso', 'gradual_1p_normal', 'steep_1p_normal', 'half_p_normal']
@@ -36,7 +38,7 @@ for v in which:
     print(f'{v} clean flag area {area:.4f}  ({len(rc.suspects)} suspects, {tc:.0f}s)', flush=True)
     out[v] = {'clean_area': area, 'n_clean': len(rc.suspects)}
     if v == 'v02':
-        z = np.load('/tmp/vcdata/baseline/work/masks/sra_clean.npz'); n = int(np.prod(z['_shape']))
+        z = np.load(DATA + '/baseline/work/masks/sra_clean.npz')   # from scripts/eval/baseline/run_sra.py; n = int(np.prod(z['_shape']))
         bm = np.unpackbits(z['default'])[:n].reshape(tuple(z['_shape']))
         print('   baseline v0.2 clean mask area', round(float((bm.astype(bool) & valid).sum() / valid.sum()), 4),
               'agreement with this run', round(float((bm.astype(bool) == mc).mean()), 5))
@@ -66,5 +68,5 @@ for v in which:
         out[v][name] = {'detected': k, 'ci': wilson(k, 20), 'sham': sh, 'sham_n': len(sham), 'recall_kind': sc['recall_kind'],
                         'per_plant': ''.join(map(str, det)), 'kinds': kinds}
 tag = sys.argv[4] if len(sys.argv) > 4 else 'default'
-os.makedirs('/tmp/vcdata/v03/dev', exist_ok=True)
-json.dump(out, open(f'/tmp/vcdata/v03/dev/plants_{tag}_{"_".join(which)}.json', 'w'), indent=1)
+os.makedirs(DATA + '/v03/dev', exist_ok=True)
+json.dump(out, open(f'{DATA}/v03/dev/plants_{tag}_{"_".join(which)}.json', 'w'), indent=1)

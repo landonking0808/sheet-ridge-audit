@@ -4,11 +4,12 @@ census) and pickle the ProfileGrid (profiles float16) so analysis variants can b
 compared offline on identical inputs. PHerc0139 only (dev set)."""
 import os, sys, json, time, pickle, shutil, urllib.request
 import numpy as np
-sys.path.insert(0, '/tmp/vcdata')
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "eval"))
+from _paths import DATA, DOCS, segment, W025  # $SRA_EVAL_DATA (see docs/eval/README.md)
 from s3ls import B
 from sheet_ridge_audit import audit, open_field
-OUT = '/tmp/vcdata/v03/grids'
-urls = json.load(open('/tmp/vcdata/census/segment_urls.json'))
+OUT = DATA + '/v03/grids'; os.makedirs(OUT, exist_ok=True)
+urls = json.load(open(DOCS + '/census/segment_urls.json'))
 want = sys.argv[1:]
 field = open_field("lasagna", "PHerc0139", cache_mb=768)
 for short in want:
@@ -17,7 +18,7 @@ for short in want:
     m = [u for u in urls if f'-{short}_' in u.split('/')[2] or u.split('/')[2].split('-', 1)[1].startswith(short + '_')]
     assert len(m) == 1, (short, m)
     m = m[0]
-    d = f'/tmp/vcdata/v03/tmp_{short}.tifxyz'
+    d = f'{DATA}/v03/tmp_{short}.tifxyz'
     os.makedirs(d, exist_ok=True)
     t0 = time.time()
     try:

@@ -1,0 +1,182 @@
+{
+ "n_bad": 313,
+ "n_good": 312,
+ "scores": {
+  "las_neg_median_c0": {
+   "family": "lasagna",
+   "desc": "-median cos at mesh",
+   "auc": 0.6109,
+   "ci95": [
+    0.5651,
+    0.6547
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "las_frac_c0_lt0": {
+   "family": "lasagna",
+   "desc": "fraction of vertices cos<0",
+   "auc": 0.6326,
+   "ci95": [
+    0.5892,
+    0.6764
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "las_frac_c0_lt03": {
+   "family": "lasagna",
+   "desc": "fraction of vertices cos<0.3",
+   "auc": 0.6261,
+   "ci95": [
+    0.582,
+    0.6706
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "las_largest_neg_cc": {
+   "family": "lasagna",
+   "desc": "largest 4-connected cos<0 region / valid vertices",
+   "auc": 0.6268,
+   "ci95": [
+    0.5814,
+    0.6713
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "las_peak_circvar": {
+   "family": "lasagna",
+   "desc": "circular variance of nearest cos-peak offset (phase) across vertices",
+   "auc": 0.6242,
+   "ci95": [
+    0.5809,
+    0.6688
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "las_peak_absoff": {
+   "family": "lasagna",
+   "desc": "median |nearest cos-peak offset| in periods",
+   "auc": 0.5889,
+   "ci95": [
+    0.5422,
+    0.6337
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "ct_neg_z_at_mesh": {
+   "family": "ct",
+   "desc": "-mean over vertices of CT z-score at mesh vs its own +-1 period normal profile",
+   "auc": 0.5133,
+   "ci95": [
+    0.4676,
+    0.5582
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "ct_frac_dark": {
+   "family": "ct",
+   "desc": "fraction of vertices with CT(mesh) < profile mean",
+   "auc": 0.4826,
+   "ci95": [
+    0.4357,
+    0.5269
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "ct_neg_rel_int": {
+   "family": "ct",
+   "desc": "-median CT at mesh / median CT in patch profiles",
+   "auc": 0.522,
+   "ci95": [
+    0.4757,
+    0.5682
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "ct_peak_circvar": {
+   "family": "ct",
+   "desc": "circular variance of nearest CT-peak offset",
+   "auc": 0.5798,
+   "ci95": [
+    0.5345,
+    0.6253
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "geo_max_normal_angle": {
+   "family": "geometry",
+   "desc": "max angle (deg) between neighbouring vertex normals",
+   "auc": 0.6235,
+   "ci95": [
+    0.5798,
+    0.6698
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "geo_p95_normal_angle": {
+   "family": "geometry",
+   "desc": "95th pct neighbouring normal angle",
+   "auc": 0.609,
+   "ci95": [
+    0.5647,
+    0.653
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "geo_mean_abs_curv": {
+   "family": "geometry",
+   "desc": "mean |H| (1/vox, from Laplacian . normal)",
+   "auc": 0.5828,
+   "ci95": [
+    0.5383,
+    0.6262
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "geo_edge_cv": {
+   "family": "geometry",
+   "desc": "coefficient of variation of grid edge lengths (stretch)",
+   "auc": 0.4681,
+   "ci95": [
+    0.4259,
+    0.5144
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "geo_neg_valid_frac": {
+   "family": "geometry",
+   "desc": "-valid node fraction of the grid",
+   "auc": 0.5035,
+   "ci95": [
+    0.4598,
+    0.5496
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  },
+  "geo_neg_n_valid": {
+   "family": "geometry",
+   "desc": "-number of valid nodes (patch size)",
+   "auc": 0.4842,
+   "ci95": [
+    0.4385,
+    0.5294
+   ],
+   "n_bad": 313,
+   "n_good": 312
+  }
+ }
+}

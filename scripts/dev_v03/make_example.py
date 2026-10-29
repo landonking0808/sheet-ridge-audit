@@ -2,11 +2,13 @@
 """v0.3 worked example: w025 stride 1 from the cached Lasagna profile grid (identical to a
 fresh audit's sampling), CT cross-sections streamed at OME level 2."""
 import pickle, sys, os, json, time
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "eval"))
+from _paths import DATA, DOCS, segment, W025  # $SRA_EVAL_DATA (see docs/eval/README.md)
 from sheet_ridge_audit import open_field, ZarrField
 from sheet_ridge_audit.audit import _finish
 from sheet_ridge_audit.tifxyz import read_tifxyz
-SEG = '/tmp/vcdata/lasagna/segments/20250108000000-on-20260102150214-2.399um.tifxyz'
-g = pickle.load(open('/tmp/vcdata/v03/grids/w025_s1_clean.pkl', 'rb'))['grid']
+SEG = segment(W025)
+g = pickle.load(open(DATA + '/v03/grids/w025_s1_clean.pkl', 'rb'))['grid']
 field = open_field("lasagna", "PHerc0139")
 seg = read_tifxyz(SEG, volume_shape_zyx=getattr(field, 'shape_l0', None))
 from sheet_ridge_audit import Params

@@ -1,8 +1,21 @@
 # v0.3 development scripts
 
 These produced the **development-set** numbers in `docs/RESULTS.md` (v0.3
-section). They hard-code the paths of the machine they ran on (`/tmp/vcdata/...`)
-and are kept so the numbers can be traced, not as a polished tool.
+section). They are kept so the numbers can be traced, not as a polished tool.
+Downloads and intermediate files go under `$SRA_EVAL_DATA` (default
+`./sra-eval-data`, see `scripts/eval/_paths.py`); the review labels and the
+plant sites are read from `docs/eval/`. `devrun.py` and `plant_eval.py` also
+need the v0.2 analysis module next to them:
+
+```bash
+export SRA_EVAL_DATA=$PWD/sra-eval-data; mkdir -p $SRA_EVAL_DATA/v03
+git show 0b3578a:src/sheet_ridge_audit/analysis.py > $SRA_EVAL_DATA/v03/analysis_v02.py
+python scripts/dev_v03/cache_grids.py w025 w044      # census segments by short name
+python scripts/dev_v03/devrun.py dev w025 w044 && python scripts/dev_v03/summ.py dev
+```
+
+`plant_eval.py` compares against the v0.2 clean mask from
+`scripts/eval/baseline/run_sra.py clean`.
 
 Dev set: PHerc0139 only (the v0.2 census review labels and the w025 plants of the
 v0.2 baseline study). PHercParis4 is not touched; it is held out for an
