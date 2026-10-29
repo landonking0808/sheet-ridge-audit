@@ -108,7 +108,7 @@ def _xsec_fields(a, field, volume=None):
         return field, None
     lvl = a.xsec_level
     if lvl is None:
-        lvl = 2 if (a.period or 0) >= 40 or getattr(field, "fullres_voxel_um", 9) < 4 else 1
+        lvl = 2 if (a.period or 0) >= 40 or (getattr(field, "fullres_voxel_um", None) or 9) < 4 else 1
     if is_ct and vol == field.url and lvl == field.level:
         return field, None
     return ZarrField(vol, level=lvl, cache_mb=192), overlay

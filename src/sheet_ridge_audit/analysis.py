@@ -364,15 +364,14 @@ def detect_suspects(grid, m: Metrics, params: Params | None = None):
         return _detect_suspects(grid, m, params)
 
 
-def _split_tiles(reg_mask, sl, tile):
-    """Split one region (mask within slice ``sl``) into tile-sized connected pieces."""
-    sub = reg_mask[sl]
+def _split_tiles(sub, tile):
+    """Split one region (bool mask on its bbox) into tile-sized connected pieces.
+    Returns a list of masks of the same shape as ``sub``."""
     h, w = sub.shape
     if h <= tile and w <= tile:
-        return [(sl, sub)]
+        return [sub]
     nr, nc = int(np.ceil(h / tile)), int(np.ceil(w / tile))
-    # equal-size tiles along each axis
-    rb = np.linspace(0, h, nr + 1).round().astype(int)
+    rb = np.linspace(0, h, nr + 1).round().astype(int)   # equal-size tiles along each axis
     cb = np.linspace(0, w, nc + 1).round().astype(int)
     out = []
     for i in range(nr):
@@ -383,7 +382,7 @@ def _split_tiles(reg_mask, sl, tile):
                 continue
             lab, n = ndi.label(piece, structure=np.ones((3, 3)))
             for L in range(1, n + 1):
-                out.append((sl, lab == L))
+                out.append(lab == L)
     return out
 
 
@@ -396,7 +395,8 @@ def _detect_suspects(grid, m: Metrics, params: Params):
     wlab, cut = _cut_regions(m, params)
     wind = m.trusted & (m.winding != 0)
     phase_cut = wind & cut[wlab]
-    m.masks.update(off_ridge=off, winding=wind & ~phase_cut, phase_cut=phase_cut)
+    wind_ok = wind & ~phase_cut
+    m.masks.update(off_ridge=off, winding=wind_ok, phase_cut=phase_cut)
     union = (off | wind) & ok
     lab, nl = ndi.label(union, structure=np.ones((3, 3)))
     area_v = vs * vs
@@ -407,25 +407,21 @@ def _detect_suspects(grid, m: Metrics, params: Params):
     wabs = np.where(phase_cut, 0.5 * wabs, wabs)
     sev = sev_off + params.winding_weight * wabs
     res = m.masks.get("residue", np.zeros_like(ok))
-    pieces = []
+    counts = np.bincount(lab.ravel(), minlength=nl + 1)
+    pieces = []   # (slice, mask on the slice)
     for L, sl in enumerate(ndi.find_objects(lab), start=1):
-        if sl is None:
+        if sl is None or counts[L] < min_v:
             continue
-        reg = lab == L
-        if reg[sl].sum() < min_v:
-            continue
-        for psl, pm in _split_tiles(reg, sl, tile):
+        for pm in _split_tiles(lab[sl] == L, tile):
             if pm.sum() >= min_v:
-                full = np.zeros((h, w), bool)
-                full[psl] = pm
-                pieces.append(full)
+                pieces.append((sl, pm))
     suspects = []
-    for reg in pieces:
+    for sl, reg in pieces:
         n = int(reg.sum())
         kinds = []
-        n_off = int((off & reg).sum())
-        n_w = int((m.masks["winding"] & reg).sum())
-        n_c = int((phase_cut & reg).sum())
+        n_off = int((off[sl] & reg).sum())
+        n_w = int((wind_ok[sl] & reg).sum())
+        n_c = int((phase_cut[sl] & reg).sum())
         if n_w >= max(2, 0.1 * n):
             kinds.append("winding")
         if n_c >= max(2, 0.1 * n):
@@ -433,29 +429,31 @@ def _detect_suspects(grid, m: Metrics, params: Params):
         if n_off >= max(2, 0.1 * n) or not kinds:
             kinds.insert(0, "off_ridge")
         rr, cc = np.nonzero(reg)
-        sv = float(np.mean(sev[reg]))
+        sv_s = sev[sl]
+        sv = float(np.mean(sv_s[reg]))
         area_p2 = n * area_v / (P * P)
-        wv = m.winding[reg & m.trusted]
+        trs = m.trusted[sl] & reg
+        wv = m.winding[sl][trs]
         wo = int(np.round(np.median(wv))) if len(wv) else 0
         if wo == 0 and len(wv) and (wv != 0).mean() > 0.3:
-            nzv = wv[wv != 0]
-            wo = int(np.sign(np.median(nzv)))
-        rv = np.abs(m.rel_offset[reg & m.trusted])
+            wo = int(np.sign(np.median(wv[wv != 0])))
+        rv = np.abs(m.rel_offset[sl][trs])
         cr, ccm = rr.mean(), cc.mean()
-        # centre: the region vertex with the highest severity near the centroid
         d2 = (rr - cr) ** 2 + (cc - ccm) ** 2
-        i = int(np.argmin(d2 - 1e-3 * sev[rr, cc]))
-        r_s, c_s = int(rr[i]), int(cc[i])
+        i = int(np.argmin(d2 - 1e-3 * sv_s[rr, cc]))
+        r_s, c_s = int(rr[i] + sl[0].start), int(cc[i] + sl[1].start)
+        R0, R1 = rr.min() + sl[0].start, rr.max() + sl[0].start
+        C0, C1 = cc.min() + sl[1].start, cc.max() + sl[1].start
         suspects.append(Suspect(
             id=0, kinds=kinds, score=round(area_p2 * sv, 4), severity=round(sv, 4), area_vertices=n,
             area_vx2=round(n * area_v, 1), area_periods2=round(area_p2, 3),
             row=_r(grid.orig_rows[r_s], 2), col=_r(grid.orig_cols[c_s], 2),
             zyx=[round(float(v), 2) for v in grid.zyx[r_s, c_s]],
-            bbox_grid=[_r(grid.orig_rows[rr.min()], 2), _r(grid.orig_cols[cc.min()], 2),
-                       _r(grid.orig_rows[rr.max()], 2), _r(grid.orig_cols[cc.max()], 2)],
-            mean_c0=_r(np.nanmean(m.c0[reg])), min_c0=_r(np.nanmin(m.c0_smooth[reg])),
+            bbox_grid=[_r(grid.orig_rows[R0], 2), _r(grid.orig_cols[C0], 2),
+                       _r(grid.orig_rows[R1], 2), _r(grid.orig_cols[C1], 2)],
+            mean_c0=_r(np.nanmean(m.c0[sl][reg])), min_c0=_r(np.nanmin(m.c0_smooth[sl][reg])),
             winding_offset=wo, max_abs_offset_cycles=_r(rv.max() if len(rv) else 0.0, 3),
-            n_residues=int(res[reg].sum()), sub_rc=(r_s, c_s),
+            n_residues=int(res[sl][reg].sum()), sub_rc=(r_s, c_s),
             seg_rc=(int(grid.rows[r_s]), int(grid.cols[c_s]))))
     order = sorted(range(len(suspects)), key=lambda j: (-suspects[j].score, -suspects[j].area_vertices))
     labels = np.zeros((h, w), np.int32)
@@ -463,7 +461,8 @@ def _detect_suspects(grid, m: Metrics, params: Params):
     for rank, j in enumerate(order, start=1):
         s = suspects[j]
         s.id = rank
-        labels[pieces[j]] = rank
+        sl, reg = pieces[j]
+        labels[sl][reg] = rank
         out.append(s)
     return out, labels
 

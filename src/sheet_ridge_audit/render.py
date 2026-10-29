@@ -49,9 +49,16 @@ def _norm_img(x, valid):
     return out
 
 
-def _outline(ax, X, Y, mask, color, lw):
-    if mask.sum() >= 1:
-        ax.contour(X, Y, ndi.binary_dilation(mask).astype(float), levels=[0.5], colors=[color], linewidths=lw)
+def _outline(ax, grid, labels, sid, color, lw):
+    """Outline one suspect (contour of its label, computed on its bbox only)."""
+    rr, cc = np.nonzero(labels == sid) if not isinstance(labels, tuple) else labels
+    if not len(rr):
+        return
+    r0, r1 = max(0, rr.min() - 2), min(grid.valid.shape[0], rr.max() + 3)
+    c0, c1 = max(0, cc.min() - 2), min(grid.valid.shape[1], cc.max() + 3)
+    sub = np.zeros((r1 - r0, c1 - c0), np.float32)
+    sub[rr - r0, cc - c0] = 1
+    ax.contour(grid.orig_cols[c0:c1], grid.orig_rows[r0:r1], sub, levels=[0.5], colors=[color], linewidths=lw)
 
 
 def overview_png(path, grid, m, suspects, labels, title, top=40):
@@ -67,8 +74,15 @@ def overview_png(path, grid, m, suspects, labels, title, top=40):
     else:
         H = 8.5
         fig, axes = plt.subplots(1, 2, figsize=(float(np.clip(2 * H / max(ar, 1e-3), 8, 20)) + 1.5, H + 1.2))
-    X = grid.orig_cols[None, :].repeat(h, 0)
-    Y = grid.orig_rows[:, None].repeat(w, 1)
+    idx = {}
+    if suspects:
+        lr, lc = np.nonzero((labels > 0) & (labels <= top))
+        lv = labels[lr, lc]
+        order = np.argsort(lv, kind="stable")
+        lr, lc, lv = lr[order], lc[order], lv[order]
+        cuts = np.searchsorted(lv, np.arange(1, top + 2))
+        for k in range(min(top, len(suspects))):
+            idx[k + 1] = (lr[cuts[k]:cuts[k + 1]], lc[cuts[k]:cuts[k + 1]])
     panels = [
         (m.c0_smooth, "RdBu", -1, 1, "c0: field at the mesh (smoothed); blue = on a ridge, red = in a gap"),
         (np.where(m.trusted, m.rel_offset, np.nan), "PuOr_r", -1.5, 1.5,
@@ -79,9 +93,8 @@ def overview_png(path, grid, m, suspects, labels, title, top=40):
         cm = plt.get_cmap(cmap).with_extremes(bad="#3a3a3a")
         im = ax.imshow(np.ma.masked_invalid(img), cmap=cm, vmin=lo, vmax=hi, extent=ext, interpolation="nearest")
         for s in suspects[:top]:
-            reg = labels == s.id
             col = "#000000" if "winding" not in s.kinds else "#00a000"
-            _outline(ax, X, Y, reg, col, 1.3)
+            _outline(ax, grid, idx.get(s.id, (np.zeros(0, int), np.zeros(0, int))), s.id, col, 1.3)
         for s in suspects[:top]:
             ax.annotate(str(s.id), (s.col, s.row), color="black", fontsize=fs, fontweight="bold",
                         ha="center", va="center",
@@ -153,7 +166,7 @@ def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=
     half_h = half_h or float(np.clip(2.5 * spacing, 12, 300))
     vs = getattr(field, "voxel_size", 1.0) or 1.0
     res = res or max(0.5, vs, half_w / 350)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.4))
+    fig, axes = plt.subplots(1, 2, figsize=(14, float(np.clip(7.0 * half_h / half_w, 2.0, 7.0)) + 1.6))
     for ax, tdir, nm in ((axes[0], tu[r, c], "slice along grid cols (u)"), (axes[1], tv[r, c], "slice along grid rows (v)")):
         t = np.asarray(tdir, np.float64)
         if not np.isfinite(t).all():

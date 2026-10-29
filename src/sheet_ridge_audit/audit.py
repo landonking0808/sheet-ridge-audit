@@ -81,7 +81,7 @@ def audit(seg, field, *, stride=1, roi=None, upsample="auto", params: Params | N
 
     ``roi`` 'r0:r1,c0:c1' is in the original tifxyz grid; ``upsample``
     ('auto' or an int) bilinearly densifies the grid after cropping, 'auto'
-    picks the smallest factor that puts sampled vertices <= period/3 apart;
+    picks the smallest factor that puts grid nodes <= period/3 apart;
     ``stride`` subsamples the densified grid. ``period`` (voxels) skips the
     pilot measurement. Nothing is written; call ``.write(out)``."""
     params = params or Params()
@@ -96,7 +96,9 @@ def audit(seg, field, *, stride=1, roi=None, upsample="auto", params: Params | N
     if verbose:
         log(f"period {P:.2f} vx ({info.get('source')}, {info['seconds']}s)")
     if upsample == "auto" or upsample is None:
-        upsample = int(np.clip(np.ceil(seg.node_spacing * stride / (P / 3.0)), 1, 4))
+        # densify only grids whose nodes are farther apart than period/3; --stride then
+        # subsamples on purpose
+        upsample = int(np.clip(np.ceil(seg.node_spacing / (P / 3.0) - 1e-6), 1, 4))
     seg = upsample_segment(seg, int(upsample))
     if radius is None:
         radius = params.radius_periods * P

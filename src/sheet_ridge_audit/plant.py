@@ -156,6 +156,8 @@ def score_plants(result, plants, min_overlap=0.05, wmin=0.05):
     g = result.grid
     labels = result.labels
     orow, ocol = g.orig_rows, g.orig_cols
+    nsus = len(result.suspects)
+    by_id = {s.id: s for s in result.suspects}
     out = []
     matched = set()
     for k, p in enumerate(plants):
@@ -164,16 +166,16 @@ def score_plants(result, plants, min_overlap=0.05, wmin=0.05):
         fw = 0.5 + 0.5 * np.cos(np.pi * x)
         foot = (fw > wmin) & result.metrics.valid
         nfoot = int(foot.sum())
-        best = None
+        ov = np.bincount(labels[foot].ravel(), minlength=nsus + 1)   # overlap per suspect id
         hits = []
-        for s in result.suspects:
-            ov = int(((labels == s.id) & foot).sum())
-            inside = np.hypot(s.row - p.row, s.col - p.col) <= p.radius + p.ramp
-            if nfoot and (ov / nfoot >= min_overlap or inside):
-                hits.append(s)
-                matched.add(s.id)
-                if best is None or s.score > best.score:
-                    best = s
+        if nfoot:
+            for sid in range(1, nsus + 1):
+                s = by_id[sid]
+                inside = np.hypot(s.row - p.row, s.col - p.col) <= p.radius + p.ramp
+                if ov[sid] / nfoot >= min_overlap or inside:
+                    hits.append(s)
+                    matched.add(sid)
+        best = max(hits, key=lambda s: s.score) if hits else None
         sign = int(np.sign(p.shift))
         if p.kind == "switch":
             kind_ok = any("winding" in s.kinds and s.winding_offset == sign * int(round(abs(p.shift)))

@@ -65,12 +65,14 @@ def new_fp(res, plants, base_res):
     if base.shape != res.labels.shape:
         return sc, None
     base = ndi.binary_dilation(base, iterations=2)
+    touches = np.bincount(res.labels[base].ravel(), minlength=len(res.suspects) + 1) > 0
     n = 0
     area = 0.0
-    for s in res.suspects:
-        if s.id in sc["unmatched_ids"] and not (base & (res.labels == s.id)).any():
+    by_id = {s.id: s for s in res.suspects}
+    for sid in sc["unmatched_ids"]:
+        if not touches[sid]:
             n += 1
-            area += s.area_periods2
+            area += by_id[sid].area_periods2
     return sc, (n, round(area, 2))
 
 
@@ -85,6 +87,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--plateau", type=float, default=8.0, help="plateau radius, grid nodes")
     ap.add_argument("--ramp", type=float, default=10.0, help="ramp width, grid nodes")
+    ap.add_argument("--mags", default="1,0.5", help="plant magnitudes in periods (comma list)")
     ap.add_argument("--keep", action="store_true")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -103,7 +106,10 @@ def main():
     from sheet_ridge_audit.plant import measure_local_period
     periods = [measure_local_period(field, seg, r, c, a.plateau + a.ramp)[0] for r, c in sites]
     runs = {}
-    for name, mag in (("switch_1p", 1.0), ("gap_half_p", 0.5)):
+    mags = [float(v) for v in a.mags.split(",")]
+    names = {1.0: "switch_1p", 0.5: "gap_half_p"}
+    for mag in mags:
+        name = names.get(mag, f"shift_{mag:g}p")
         plants = [Plant(row=r, col=c, radius=a.plateau, ramp=a.ramp, shift=float(s * mag), period=float(p))
                   for (r, c), s, p in zip(sites, signs, periods)]
         dst = os.path.join(a.out, f"planted_{name}.tifxyz")
@@ -121,8 +127,10 @@ def main():
     rows = []
     for mq in grid["min_quality"]:
         # metrics (incl. unwrapping) depend on min_quality only; detection is cheap
+        t = time.time()
         mets = {k: compute_metrics(r.grid, Params(min_quality=mq))
                 for k, r in [("base", base)] + [(n, v[1]) for n, v in runs.items()]}
+        log(f"metrics for min_quality {mq}: {time.time() - t:.0f}s")
         for c0, ma in itertools.product(grid["c0_thr"], grid["min_area_periods2"]):
             p = Params(c0_thr=c0, min_area_periods2=ma, min_quality=mq)
             b = redetect_fast(base, mets["base"], p)
@@ -140,6 +148,7 @@ def main():
                 row[f"{name}_new_fp_area_p2"] = fp[1] if fp else None
                 row[f"{name}_plateau_W"] = [pl["plateau_median_W"] for pl in sc["plants"]]
             rows.append(row)
+        log(f"min_quality {mq} sweep done: {time.time() - t:.0f}s")
     default = Params()
     dflt = next(r for r in rows if r["c0_thr"] == default.c0_thr and r["min_area_periods2"] == default.min_area_periods2
                 and r["min_quality"] == default.min_quality)
@@ -154,15 +163,16 @@ def main():
            "sweep": rows}
     with open(os.path.join(a.out, "calibration.json"), "w") as f:
         json.dump(out, f, indent=1, default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o))
-    lines = ["| c0_thr | min_area P^2 | min_quality | 1-period recall (kind) | half-period recall (kind) | "
-             "new FP (1p / 0.5p) | baseline suspects | baseline area |",
-             "|---|---|---|---|---|---|---|---|"]
+    lines = [f"plants: {len(sites)} sites, plateau {a.plateau} nodes, ramp {a.ramp} nodes; "
+             f"recall (kind recall) per magnitude; new FP = suspects touching no plant and no baseline suspect",
+             "", "| c0_thr | min_area P^2 | min_quality | " + " | ".join(f"{n} recall (kind)" for n in runs)
+             + " | new FP | baseline suspects | baseline area |",
+             "|---|---|---|" + "---|" * len(runs) + "---|---|---|"]
     for r in rows:
         lines.append(f"| {r['c0_thr']} | {r['min_area_periods2']} | {r['min_quality']} | "
-                     f"{r['switch_1p_recall']} ({r['switch_1p_kind_recall']}) | "
-                     f"{r['gap_half_p_recall']} ({r['gap_half_p_kind_recall']}) | "
-                     f"{r['switch_1p_new_fp']} / {r['gap_half_p_new_fp']} | {r['baseline_suspects']} | "
-                     f"{r['baseline_suspect_area_fraction']} |")
+                     + " | ".join(f"{r[n + '_recall']} ({r[n + '_kind_recall']})" for n in runs)
+                     + " | " + " / ".join(str(r[n + '_new_fp']) for n in runs)
+                     + f" | {r['baseline_suspects']} | {r['baseline_suspect_area_fraction']} |")
     with open(os.path.join(a.out, "calibration.md"), "w") as f:
         f.write("\n".join(lines) + "\n")
     print(json.dumps({"default": dflt, "out": a.out}, default=str))
