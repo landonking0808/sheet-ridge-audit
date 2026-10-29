@@ -6,7 +6,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-from matplotlib.patches import Patch  # noqa: E402
 from scipy import ndimage as ndi  # noqa: E402
 
 from .tifxyz import grid_normals, grid_tangents  # noqa: E402
@@ -50,41 +49,56 @@ def _norm_img(x, valid):
     return out
 
 
-def suspects_png(path, grid, metrics, suspects, labels, title, top=30):
-    img = _norm_img(metrics.center_value, metrics.valid)
-    h, w = img.shape
-    fig, ax = plt.subplots(figsize=_aspect_fig(h, w))
-    cm = plt.get_cmap("gray").with_extremes(bad="#301818")
+def _outline(ax, X, Y, mask, color, lw):
+    if mask.sum() >= 1:
+        ax.contour(X, Y, ndi.binary_dilation(mask).astype(float), levels=[0.5], colors=[color], linewidths=lw)
+
+
+def overview_png(path, grid, m, suspects, labels, title, top=40):
+    """Two panels over the original tifxyz grid: c0 (field at the mesh) and
+    the unwrapped winding offset, each with the suspects outlined and numbered."""
+    h, w = m.valid.shape
     ext = _extent(grid)
-    ax.imshow(np.ma.masked_invalid(img), cmap=cm, extent=ext, interpolation="nearest")
-    colors = {"off_sheet": "#ffb000", "step": "#ff2050", "drift": "#40c0ff", "winding": "#ff40ff", "off_ridge": "#40c0ff", "residue": "#ffffff"}
+    wide = w > 1.6 * h
+    ar = h / max(w, 1)
+    if wide:
+        W = 15.0
+        fig, axes = plt.subplots(2, 1, figsize=(W, float(np.clip(2 * W * ar, 4, 18)) + 1.6))
+    else:
+        H = 8.5
+        fig, axes = plt.subplots(1, 2, figsize=(float(np.clip(2 * H / max(ar, 1e-3), 8, 20)) + 1.5, H + 1.2))
     X = grid.orig_cols[None, :].repeat(h, 0)
     Y = grid.orig_rows[:, None].repeat(w, 1)
-    # outlines of the kind masks (thin), then suspect outlines (thick)
-    for k in ("off_sheet", "off_ridge", "winding"):
-        mk = metrics.masks.get(k)
-        if mk is not None and mk.any():
-            ax.contour(X, Y, mk.astype(float), levels=[0.5], colors=[colors[k]], linewidths=0.6, alpha=0.8)
-    st = metrics.masks.get("step")
-    if st is not None and st.any():
-        rr, cc = np.nonzero(st)
-        ax.scatter(grid.orig_cols[cc], grid.orig_rows[rr], s=2, c=colors["step"], linewidths=0)
-    for s in suspects[:top]:
-        reg = labels == labels[s.sub_rc]
-        if reg.sum() >= 2:
-            ax.contour(X, Y, ndi.binary_dilation(reg).astype(float), levels=[0.5], colors=["#00ff60"], linewidths=1.2)
-        ax.text(s.col, s.row, str(s.id), color="#00ff60", fontsize=8, ha="center", va="center",
-                bbox=dict(facecolor="black", alpha=0.5, pad=0.5, linewidth=0))
-    handles = [Patch(color=colors[k], label=k) for k in ("off_sheet", "off_ridge", "step", "winding")]
-    handles.append(Patch(color="#00ff60", label="suspect (ranked)"))
-    ax.legend(handles=handles, loc="lower right", fontsize=7, framealpha=0.6)
-    ax.set_xlim(ext[0], ext[1])
-    ax.set_ylim(ext[2], ext[3])
-    ax.set_title(title, fontsize=10)
-    ax.set_xlabel("tifxyz grid col")
-    ax.set_ylabel("tifxyz grid row")
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
+    panels = [
+        (m.c0_smooth, "RdBu", -1, 1, "c0: field at the mesh (smoothed); blue = on a ridge, red = in a gap"),
+        (np.where(m.trusted, m.rel_offset, np.nan), "PuOr_r", -1.5, 1.5,
+         "winding offset (sheets) vs the dominant sheet; |x|>0.5 = other sheet"),
+    ]
+    fs = 9 if len(suspects) > 25 else 10
+    for ax, (img, cmap, lo, hi, ttl) in zip(np.atleast_1d(axes), panels):
+        cm = plt.get_cmap(cmap).with_extremes(bad="#3a3a3a")
+        im = ax.imshow(np.ma.masked_invalid(img), cmap=cm, vmin=lo, vmax=hi, extent=ext, interpolation="nearest")
+        for s in suspects[:top]:
+            reg = labels == s.id
+            col = "#000000" if "winding" not in s.kinds else "#00a000"
+            _outline(ax, X, Y, reg, col, 1.3)
+        for s in suspects[:top]:
+            ax.annotate(str(s.id), (s.col, s.row), color="black", fontsize=fs, fontweight="bold",
+                        ha="center", va="center",
+                        bbox=dict(boxstyle="round,pad=0.15", facecolor="#ffff66", alpha=0.85, linewidth=0.5))
+        ax.set_xlim(ext[0], ext[1])
+        ax.set_ylim(ext[2], ext[3])
+        ax.set_title(ttl, fontsize=10)
+        ax.set_xlabel("tifxyz grid col", fontsize=9)
+        ax.set_ylabel("tifxyz grid row", fontsize=9)
+        fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
+    from matplotlib.lines import Line2D
+    handles = [Line2D([0], [0], color="#000000", lw=1.5, label="suspect: off ridge (gap)"),
+               Line2D([0], [0], color="#00a000", lw=1.5, label="suspect: on another sheet (winding)")]
+    fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=9, frameon=False)
+    fig.suptitle(title, fontsize=12)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.97))
+    fig.savefig(path, dpi=90)
     plt.close(fig)
 
 
@@ -119,10 +133,12 @@ def _plane_trace(seg, p0, a_dir, n_dir, half_w, half_h, r, c):
 
 
 def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=None,
-                      half_w=None, half_h=None, res=None, title=""):
-    """Two CT slices through the suspect centre, each orthogonal to the surface
-    (one along the grid's column direction, one along its row direction), with
-    the mesh trace drawn in colour (magenta inside the suspect region)."""
+                      half_w=None, half_h=None, res=None, title="", overlay=None):
+    """Two slices through the suspect centre, each orthogonal to the surface
+    (one along the grid's column direction, one along its row direction), from
+    ``field`` (raw CT, normally). The mesh's intersection with each slice is
+    drawn (cyan; magenta inside the suspect). ``overlay`` (e.g. the Lasagna cos
+    field) adds its ridge lines (cos = 0.7 contours, red)."""
     r, c = suspect.seg_rc
     nrm = grid_normals(seg.zyx, seg.valid)
     tu, tv = grid_tangents(seg.zyx, seg.valid)
@@ -131,13 +147,14 @@ def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=
     if not np.isfinite(n).all():
         return False
     b = suspect.bbox_grid
-    ext_vox = seg.node_spacing * seg.upsample * max(b[2] - b[0], b[3] - b[1], 1.0 / seg.upsample)
-    half_w = half_w or float(np.clip(0.75 * ext_vox + 4 * spacing, 6 * spacing, 400))
-    half_h = half_h or float(np.clip(max(3.0 * spacing, 0.3 * half_w), 12, 150))
+    node = seg.node_spacing * seg.upsample
+    ext_vox = node * max(b[2] - b[0], b[3] - b[1], 1.0)
+    half_w = half_w or float(np.clip(0.6 * ext_vox + 3 * spacing, 4 * spacing, 8 * spacing))
+    half_h = half_h or float(np.clip(2.5 * spacing, 12, 300))
     vs = getattr(field, "voxel_size", 1.0) or 1.0
-    res = res or max(0.5, min(vs, half_w / 300))
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5.2))
-    for ax, tdir, nm in ((axes[0], tu[r, c], "along grid cols (u)"), (axes[1], tv[r, c], "along grid rows (v)")):
+    res = res or max(0.5, vs, half_w / 350)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5.4))
+    for ax, tdir, nm in ((axes[0], tu[r, c], "slice along grid cols (u)"), (axes[1], tv[r, c], "slice along grid rows (v)")):
         t = np.asarray(tdir, np.float64)
         if not np.isfinite(t).all():
             ax.set_axis_off()
@@ -147,17 +164,24 @@ def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=
         A = np.arange(-half_w, half_w + 1e-6, res)
         Hh = np.arange(-half_h, half_h + 1e-6, res)
         aa, hh = np.meshgrid(A, Hh)
-        pts = p0 + aa[..., None] * t + hh[..., None] * n
+        pts = (p0 + aa[..., None] * t + hh[..., None] * n).reshape(-1, 3)
         if hasattr(field, "prefetch"):
-            field.prefetch(pts.reshape(-1, 3))
-        img = np.asarray(field.sample(pts.reshape(-1, 3)), np.float32).reshape(aa.shape)
+            field.prefetch(pts)
+        img = np.asarray(field.sample(pts), np.float32).reshape(aa.shape)
         ok = np.isfinite(img)
-        if ok.any():
-            lo, hi = np.percentile(img[ok], [1, 99.5])
-        else:
-            lo, hi = 0, 1
+        lo, hi = np.percentile(img[ok], [1, 99.5]) if ok.any() else (0, 1)
         ax.imshow(np.ma.masked_invalid(img), cmap="gray", vmin=lo, vmax=hi, origin="lower",
                   extent=[A[0], A[-1], Hh[0], Hh[-1]], interpolation="bilinear")
+        if overlay is not None:
+            ores = max(res, 0.5 * (getattr(overlay, "voxel_size", 1.0) or 1.0))
+            A2 = np.arange(-half_w, half_w + 1e-6, ores)
+            H2 = np.arange(-half_h, half_h + 1e-6, ores)
+            a2, h2 = np.meshgrid(A2, H2)
+            ov = np.asarray(overlay.sample((p0 + a2[..., None] * t + h2[..., None] * n).reshape(-1, 3)),
+                            np.float32).reshape(a2.shape)
+            if np.isfinite(ov).any():
+                ax.contour(A2, H2, np.nan_to_num(ov, nan=-1), levels=[0.7], colors=["#ff3030"], linewidths=0.7,
+                           alpha=0.8)
         tr = _plane_trace(seg, p0, t, n, half_w, half_h, r, c)
         if len(tr):
             inside = np.zeros(len(tr), bool)
@@ -165,19 +189,18 @@ def cross_section_png(path, seg, field, suspect, spacing, label_mask=None, grid=
                 ri = np.clip(np.searchsorted(grid.rows, tr[:, 2]), 0, len(grid.rows) - 1)
                 ci = np.clip(np.searchsorted(grid.cols, tr[:, 3]), 0, len(grid.cols) - 1)
                 inside = label_mask[ri, ci]
-            ax.scatter(tr[~inside, 0], tr[~inside, 1], s=4, c="#00e0ff", linewidths=0, label="mesh")
-            ax.scatter(tr[inside, 0], tr[inside, 1], s=5, c="#ff30ff", linewidths=0, label="mesh in suspect")
-        ax.axhline(0, color="#ffff00", lw=0.4, alpha=0.4)
-        for k in (-1, 1):
-            ax.axhline(k * spacing, color="#ffff00", lw=0.4, alpha=0.25, ls="--")
-        ax.plot([0], [0], "+", color="#ffff00", ms=10)
-        ax.set_title(f"{nm}", fontsize=9)
-        ax.set_xlabel("voxels along surface")
-        ax.set_ylabel("voxels along normal")
+            ax.scatter(tr[~inside, 0], tr[~inside, 1], s=5, c="#00e0ff", linewidths=0, label="mesh")
+            ax.scatter(tr[inside, 0], tr[inside, 1], s=6, c="#ff30ff", linewidths=0, label="mesh in suspect")
+        if overlay is not None:
+            ax.plot([], [], color="#ff3030", lw=1, label="Lasagna ridge (cos 0.7)")
+        ax.plot([0], [0], "+", color="#ffff00", ms=12)
+        ax.set_title(nm, fontsize=10)
+        ax.set_xlabel("voxels along the surface")
+        ax.set_ylabel("voxels along the mesh normal")
         ax.set_aspect("equal")
-        ax.legend(loc="upper right", fontsize=7, markerscale=3, framealpha=0.5)
+        ax.legend(loc="upper right", fontsize=7, markerscale=3, framealpha=0.6)
     fig.suptitle(title, fontsize=10)
     fig.tight_layout()
-    fig.savefig(path, dpi=110)
+    fig.savefig(path, dpi=90)
     plt.close(fig)
     return True

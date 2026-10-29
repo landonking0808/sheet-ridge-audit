@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sheet-ridge-audit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Audit Vesuvius Challenge tifxyz segments for leaving the papyrus sheet and sheet switches, by sampling CT or prediction fields along the surface normal."
 readme = "README.md"
 license = {text = "MIT"}

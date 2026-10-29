@@ -102,8 +102,9 @@ def as_field(obj) -> Field:
 class ArrayField(Field):
     """An in-memory numpy volume (tests, synthetic data). Trilinear, NaN outside."""
 
-    def __init__(self, vol: np.ndarray, name="array", ridge_is_high=True, scale=1.0):
+    def __init__(self, vol: np.ndarray, name="array", ridge_is_high=True, scale=1.0, is_cos_field=False):
         self.vol = np.asarray(vol, np.float32)
+        self.is_cos_field = bool(is_cos_field)
         self.name = name
         self.ridge_is_high = ridge_is_high
         self.voxel_size = float(scale)
@@ -123,6 +124,13 @@ class ArrayField(Field):
 def _open_mapper(url: str):
     import fsspec
     return fsspec.get_mapper(url)
+
+
+def open_store(url: str):
+    """(filesystem, root path) for a local path or any fsspec URL."""
+    import fsspec
+    fs, root = fsspec.core.url_to_fs(url.rstrip("/"))
+    return fs, root.rstrip("/")
 
 
 class ChunkCache:
@@ -147,6 +155,13 @@ class ChunkCache:
         with self._lock:
             return key in self._d
 
+    def __len__(self):
+        return len(self._d)
+
+    @property
+    def nbytes(self):
+        return self._bytes
+
     def put(self, key, arr):
         with self._lock:
             if key in self._d:
@@ -160,17 +175,21 @@ class ChunkCache:
 
 
 class ZarrLevel:
-    """One zarr v2 array (one OME level) read chunk-by-chunk via fsspec."""
+    """One zarr v2 array (one OME level), read chunk by chunk.
 
-    def __init__(self, mapper, path: str, cache: ChunkCache):
+    ``store`` is a URL/path string or an ``(fs, root)`` pair. Chunks are fetched
+    concurrently with ``fs.cat``; a chunk that does not exist (404 / no file) is
+    the fill value, or NaN with ``missing='nan'``; any other fetch error is
+    retried and then raised (never silently turned into data)."""
+
+    def __init__(self, store, path: str, cache: ChunkCache, missing: str = "fill", retries: int = 3):
         import numcodecs
-        self.m = mapper
+        self.fs, self.root = open_store(store) if isinstance(store, str) else store
         self.path = path.strip("/")
-        meta = json.loads(mapper[self._k(".zarray")])
+        meta = json.loads(self._cat_one(self._k(".zarray")))
         if meta.get("zarr_format", 2) != 2:
             raise ValueError("only zarr v2 arrays are supported")
-        if meta.get("order", "C") != "C":
-            raise ValueError("only C-order chunks are supported")
+        self.order = meta.get("order", "C")
         self.shape = tuple(meta["shape"])
         self.chunks = tuple(meta["chunks"])
         self.dtype = np.dtype(meta["dtype"])
@@ -179,12 +198,20 @@ class ZarrLevel:
         self.compressor = numcodecs.get_codec(meta["compressor"]) if meta.get("compressor") else None
         self.filters = [numcodecs.get_codec(f) for f in (meta.get("filters") or [])]
         self.cache = cache
+        self.missing = missing
+        self.retries = int(retries)
         self.nchunks = tuple(-(-s // c) for s, c in zip(self.shape, self.chunks))
         self.bytes_fetched = 0
         self.chunks_fetched = 0
+        self.chunks_missing = 0
+        self._lock = threading.Lock()
 
     def _k(self, name):
-        return f"{self.path}/{name}" if self.path else name
+        parts = [p for p in (self.root, self.path, name) if p]
+        return "/".join(parts)
+
+    def _cat_one(self, p):
+        return self.fs.cat(p)
 
     def key(self, ci):
         return self._k(self.sep.join(str(int(i)) for i in ci))
@@ -195,33 +222,73 @@ class ZarrLevel:
         for f in reversed(self.filters):
             buf = f.decode(buf)
         a = np.frombuffer(buf, dtype=self.dtype) if not isinstance(buf, np.ndarray) else buf.view(self.dtype).ravel()
-        return a.reshape(self.chunks)
+        return a.reshape(self.chunks, order=self.order)
 
-    def ensure(self, chunk_ids):
-        """Fetch (concurrently) every chunk in ``chunk_ids`` not yet cached."""
-        need = [tuple(int(v) for v in ci) for ci in chunk_ids
-                if (self.path, tuple(int(v) for v in ci)) not in self.cache]
-        if not need:
-            return
-        keys = [self.key(ci) for ci in need]
+    def _fetch(self, keys):
+        """{key: bytes | None (absent)}; retries transient errors."""
+        import time as _t
+        out = {}
+        todo = list(keys)
+        for attempt in range(self.retries + 1):
+            if not todo:
+                break
+            try:
+                if len(todo) == 1:
+                    got = {todo[0]: self._cat_safe(todo[0])}
+                elif getattr(self.fs, "async_impl", False):
+                    got = self.fs.cat(todo, on_error="return", batch_size=min(len(todo), 512))
+                else:
+                    got = self.fs.cat(todo, on_error="return")
+            except Exception as e:  # whole-batch failure
+                got = {k: e for k in todo}
+            again = []
+            for k in todo:
+                v = got.get(k)
+                if isinstance(v, (bytes, bytearray, memoryview)):
+                    out[k] = bytes(v)
+                elif v is None or isinstance(v, (FileNotFoundError, KeyError)):
+                    out[k] = None
+                else:
+                    again.append(k)
+            todo = again
+            if todo and attempt < self.retries:
+                _t.sleep(0.5 * 2 ** attempt)
+        if todo:
+            raise IOError(f"chunk fetch failed after {self.retries} retries: {todo[0]} ({len(todo)} chunks)")
+        return out
+
+    def _cat_safe(self, k):
         try:
-            got = self.m.getitems(keys, on_error="omit")
-        except TypeError:  # older mappers
-            got = {}
-            for k in keys:
-                try:
-                    got[k] = self.m[k]
-                except KeyError:
-                    pass
-        for ci, k in zip(need, keys):
-            buf = got.get(k)
-            if buf is None:
-                arr = None  # missing chunk = fill value
-            else:
-                self.bytes_fetched += len(buf)
-                self.chunks_fetched += 1
-                arr = self._decode(buf)
-            self.cache.put((self.path, ci), arr if arr is not None else _Fill(self.fill, self.chunks, self.dtype))
+            return self.fs.cat(k)
+        except Exception as e:  # noqa: BLE001 - classified by the caller
+            return e
+
+    def ensure(self, chunk_ids, batch=1024):
+        """Fetch (concurrently) every chunk in ``chunk_ids`` not yet cached."""
+        need = []
+        seen = set()
+        for ci in chunk_ids:
+            t = tuple(int(v) for v in ci)
+            if t in seen or (self.path, t) in self.cache:
+                continue
+            seen.add(t)
+            need.append(t)
+        for i in range(0, len(need), batch):
+            part = need[i:i + batch]
+            keys = [self.key(ci) for ci in part]
+            got = self._fetch(keys)
+            for ci, k in zip(part, keys):
+                buf = got.get(k)
+                if buf is None:
+                    with self._lock:
+                        self.chunks_missing += 1
+                    arr = _Fill(np.nan if self.missing == "nan" else self.fill, self.chunks, self.dtype)
+                else:
+                    with self._lock:
+                        self.bytes_fetched += len(buf)
+                        self.chunks_fetched += 1
+                    arr = self._decode(buf)
+                self.cache.put((self.path, ci), arr)
 
     def get_chunk(self, ci):
         v = self.cache.get((self.path, ci))
@@ -229,6 +296,32 @@ class ZarrLevel:
             self.ensure([ci])
             v = self.cache.get((self.path, ci))
         return v
+
+    def chunk_ids_for(self, idx_float):
+        """Chunks touched by trilinear interpolation at float indices (N, 3)."""
+        q = np.floor(np.asarray(idx_float, np.float64))
+        q = q[np.isfinite(q).all(1)].astype(np.int64)
+        if not len(q):
+            return np.zeros((0, 3), np.int64)
+        cs = np.array(self.chunks)
+        nc = np.array(self.nchunks, np.int64)
+        a = q // cs
+        spill = ((q + 1) // cs != a).any(1)   # corner in the next chunk (few points)
+        ids = [a]
+        if spill.any():
+            qa, qb = a[spill], (q[spill] + 1) // cs
+            for dz in (0, 1):
+                for dy in (0, 1):
+                    for dx in (0, 1):
+                        if dz or dy or dx:
+                            ids.append(np.stack([qb[:, 0] if dz else qa[:, 0], qb[:, 1] if dy else qa[:, 1],
+                                                 qb[:, 2] if dx else qa[:, 2]], 1))
+        ids = np.concatenate(ids)
+        ids = ids[np.all((ids >= 0) & (ids < nc), 1)]
+        if not len(ids):
+            return ids
+        flat = np.unique((ids[:, 0] * nc[1] + ids[:, 1]) * nc[2] + ids[:, 2])  # 1-D unique: fast
+        return np.stack([flat // (nc[1] * nc[2]), (flat // nc[2]) % nc[1], flat % nc[2]], 1)
 
     def lookup(self, ijk: np.ndarray, out_of_bounds=np.nan) -> np.ndarray:
         """Values at integer voxel indices (M, 3); NaN outside the array."""
@@ -255,6 +348,78 @@ class ZarrLevel:
             l = local[sel]
             out[idx[sel]] = ch[l[:, 0], l[:, 1], l[:, 2]]
         return out
+
+    def interp(self, idx_float, max_block_voxels=4_000_000, decode=None):
+        """Trilinear interpolation at float array indices (N, 3), NaN outside
+        [0, shape-1] or where a corner is a NaN (missing) chunk.
+
+        Fast path: the touched chunks are pasted into one dense block covering
+        the points' bounding box and interpolated with
+        ``scipy.ndimage.map_coordinates``; large or scattered point sets are
+        split into octants first. ``decode`` maps raw values to physical ones
+        (applied to the block, so trilinear runs on decoded values)."""
+        p = np.asarray(idx_float, np.float64).reshape(-1, 3)
+        out = np.full(len(p), np.nan, np.float32)
+        hi = np.asarray(self.shape, np.float64) - 1
+        ok = np.isfinite(p).all(1)
+        ok[ok] = np.all((p[ok] >= 0) & (p[ok] <= hi), 1)
+        if ok.any():
+            sel = np.nonzero(ok)[0]
+            cids = self.chunk_ids_for(p[sel])
+            chunk_bytes = float(np.prod(self.chunks)) * self.dtype.itemsize
+            if len(cids) * chunk_bytes < 0.5 * self.cache.max_bytes:
+                self.ensure(cids)  # one concurrent fetch for all of them
+            out[sel] = self._interp_rec(p[sel], max_block_voxels, decode, 0)
+        return out
+
+    def _interp_rec(self, p, maxv, decode, depth):
+        from scipy.ndimage import map_coordinates
+        lo = np.floor(p.min(0)).astype(np.int64)
+        hi = np.minimum(np.floor(p.max(0)).astype(np.int64) + 1, np.asarray(self.shape) - 1)
+        ext = hi - lo + 1
+        if np.prod(ext.astype(np.float64)) > maxv and len(p) > 1 and depth < 12:
+            ax = int(np.argmax(ext))
+            mid = np.median(p[:, ax])
+            left = p[:, ax] <= mid
+            if left.all() or (~left).all():
+                left = np.arange(len(p)) < len(p) // 2
+            res = np.empty(len(p), np.float32)
+            res[left] = self._interp_rec(p[left], maxv, decode, depth + 1)
+            res[~left] = self._interp_rec(p[~left], maxv, decode, depth + 1)
+            return res
+        cids = self.chunk_ids_for(p)
+        self.ensure(cids)
+        cs = np.asarray(self.chunks)
+        chunks = [(ci, self.get_chunk(tuple(int(v) for v in ci))) for ci in cids]
+        nan_fill = any(isinstance(ch, _Fill) and not np.isfinite(ch.fill) for _, ch in chunks)
+        float_path = decode is not None or nan_fill
+        block = np.zeros(tuple(int(e) for e in ext), np.float32 if float_path else self.dtype)
+        shape = np.asarray(self.shape)
+        for ci, ch in chunks:
+            c0 = ci * cs
+            c1 = np.minimum(c0 + cs, shape)
+            a = np.maximum(c0, lo)
+            b = np.minimum(c1, hi + 1)
+            if np.any(b <= a):
+                continue
+            dst = tuple(slice(int(x - y), int(z - y)) for x, z, y in zip(a, b, lo))
+            if isinstance(ch, _Fill):
+                block[dst] = ch.fill
+            else:
+                block[dst] = ch[tuple(slice(int(x - y), int(z - y)) for x, z, y in zip(a, b, c0))]
+        if decode is not None:
+            block = np.asarray(decode(block), np.float32)
+        q = (p - lo).T
+        if float_path:
+            nan = np.isnan(block)
+            if nan.any():  # NaN-aware: a NaN corner gives NaN
+                v = map_coordinates(np.where(nan, 0, block), q, order=1, mode="nearest", prefilter=False,
+                                    output=np.float32)
+                m = map_coordinates(nan.astype(np.float32), q, order=1, mode="nearest", prefilter=False,
+                                    output=np.float32)
+                v[m > 1e-6] = np.nan
+                return v
+        return map_coordinates(block, q, order=1, mode="nearest", prefilter=False, output=np.float32)
 
 
 class _Fill:
@@ -310,7 +475,7 @@ def trilinear(lookup, p: np.ndarray, shape=None) -> np.ndarray:
 class ZarrField(Field):
     """Raw CT from an OME-Zarr (or plain zarr v2 array), sampled trilinearly.
 
-    ``url`` may be an OME-Zarr group (``--level`` selects ``<url>/<level>`` and
+    ``url`` may be an OME-Zarr group (``level`` selects ``<url>/<level>`` and
     its multiscales scale/translation) or a single array. Coordinates passed to
     :meth:`sample` are level-0 voxels; level-k index = (p - translation) / scale.
     """
@@ -320,14 +485,14 @@ class ZarrField(Field):
     def __init__(self, url: str, level: int = 0, cache_mb: int = 768, name: str | None = None):
         self.url = url.rstrip("/")
         self.level = int(level)
-        self.mapper = _open_mapper(self.url)
+        self.store = open_store(self.url)
+        fs, root = self.store
         self.cache = ChunkCache(cache_mb * 2**20)
         self.scale = np.ones(3)
         self.translation = np.zeros(3)
         path = ""
-        attrs = {}
         try:
-            attrs = json.loads(self.mapper[".zattrs"])
+            attrs = json.loads(fs.cat(f"{root}/.zattrs"))
         except Exception:
             attrs = {}
         ms = attrs.get("multiscales")
@@ -349,11 +514,11 @@ class ZarrField(Field):
                 self.translation = self.translation / base
         else:
             try:
-                json.loads(self.mapper[".zarray"])
+                json.loads(fs.cat(f"{root}/.zarray"))
             except Exception:
                 path = str(self.level)
                 self.scale = np.full(3, 2.0 ** self.level)
-        self.arr = ZarrLevel(self.mapper, path, self.cache)
+        self.arr = ZarrLevel(self.store, path, self.cache)
         self.shape_l0 = tuple(int(s * k) for s, k in zip(self.arr.shape, self.scale))
         self.name = name or f"ct:L{self.level}"
         self.voxel_size = float(self.scale.mean())
@@ -362,18 +527,13 @@ class ZarrField(Field):
         return (np.asarray(points_zyx, np.float64) - self.translation) / self.scale
 
     def chunk_ids(self, points_zyx):
-        q = np.floor(self.to_level(points_zyx))
-        q = q[np.isfinite(q).all(1)].astype(np.int64)
-        cs = np.array(self.arr.chunks)
-        ids = np.concatenate([q // cs, (q + 1) // cs])
-        ids = ids[np.all((ids >= 0) & (ids < np.array(self.arr.nchunks)), 1)]
-        return np.unique(ids, axis=0) if len(ids) else ids
+        return self.arr.chunk_ids_for(self.to_level(points_zyx))
 
     def prefetch(self, points_zyx):
         self.arr.ensure(self.chunk_ids(points_zyx))
 
     def sample(self, points_zyx):
-        return trilinear(self.arr.lookup, self.to_level(points_zyx), self.arr.shape)
+        return self.arr.interp(self.to_level(points_zyx))
 
     def describe(self):
         d = super().describe()

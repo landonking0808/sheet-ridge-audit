@@ -1,22 +1,32 @@
+"""Detector tests on synthetic sheets (offline, fast).
+
+Volumes are parallel planes z = k*P: a Lasagna-style cos field and a CT-like
+gaussian-sheet volume. The test plane surface's grid normal is -z
+(d/dcol x d/drow with cols -> x, rows -> y), so moving the mesh by +P in z
+is a winding offset of -1.
+"""
 import json
 import os
 
 import numpy as np
 import pytest
 
-from sheet_ridge_audit.analysis import Params
-from sheet_ridge_audit.audit import patch_score, run_audit, write_outputs
-from sheet_ridge_audit.fields import ArrayField
-from sheet_ridge_audit.synthetic import (concentric_sheets, cylinder_surface, parallel_sheets, plane_surface,
-                                         smooth_bump)
+from sheet_ridge_audit import ArrayField, Params, audit, patch_score
+from sheet_ridge_audit.synthetic import (concentric_sheets, cylinder_surface, parallel_cos, parallel_sheets,
+                                         plane_surface, smooth_bump)
 from sheet_ridge_audit.tifxyz import write_tifxyz
 
-SP = 10.0
+P = 10.0
 
 
 @pytest.fixture(scope="module")
-def vol():
-    return parallel_sheets(shape=(80, 140, 140), spacing=SP, noise=8.0)
+def cos_field():
+    return ArrayField(parallel_cos(shape=(80, 180, 180), period=P, noise=0.15), is_cos_field=True)
+
+
+@pytest.fixture(scope="module")
+def ct_field():
+    return ArrayField(parallel_sheets(shape=(80, 180, 180), spacing=P, noise=8.0))
 
 
 def _seg(tmp_path, zyx, name="seg"):
@@ -25,100 +35,125 @@ def _seg(tmp_path, zyx, name="seg"):
     return d
 
 
-def test_on_sheet_segment_is_clean(tmp_path, vol):
-    d = _seg(tmp_path, plane_surface(60, 60, z=40.0))
-    seg, grid, m, sus, lab, sc = run_audit(d, ArrayField(vol), radius=16)
-    assert abs(m.spacing - SP) < 1.0, m.spacing
-    assert sc["mean_on_sheet"] > 0.9
-    assert sc["off_sheet_fraction"] < 0.02
-    assert abs(sc["median_abs_offset_vox"]) < 0.5
-    assert sus == []
-    assert patch_score(sc) > 0.95
-
-
-def test_concentric_sheets_cylinder_clean(tmp_path):
-    v = concentric_sheets(shape=(40, 200, 200), spacing=SP)
-    d = _seg(tmp_path, cylinder_surface(radius=50.0), "cyl")
-    seg, grid, m, sus, lab, sc = run_audit(d, ArrayField(v), radius=16, params=Params(spacing=SP))
-    assert sc["mean_on_sheet"] > 0.85
-    assert sus == []
-
-
-def _switch_surface(h=60, w=60, box=(25, 35, 25, 35), ramp=12):
-    zyx = plane_surface(h, w, z=40.0)
-    bump = smooth_bump(h, w, *box, ramp=ramp)
-    zyx[..., 0] += SP * bump  # the trace climbs gradually onto the next sheet and stays there
+def _bumped(amp, box=(30, 50, 30, 50), ramp=12, n=80):
+    zyx = plane_surface(n, n, z=40.0)
+    bump = smooth_bump(n, n, *box, ramp=ramp)
+    zyx[..., 0] += amp * P * bump
     return zyx, bump
 
 
-def test_planted_gradual_sheet_switch_found(tmp_path, vol):
-    zyx, bump = _switch_surface()
-    d = _seg(tmp_path, zyx, "switch")
-    seg, grid, m, sus, lab, sc = run_audit(d, ArrayField(vol), radius=16)
-    assert sus, "no suspect found"
-    top = sus[0]
-    r0, c0, r1, c1 = top.bbox_grid
-    # the region spans the planted bump (ramp + plateau: rows/cols 16..44)
-    assert r0 <= 24 and r1 >= 36 and c0 <= 24 and c1 >= 36, top.bbox_grid
-    assert 18 <= top.row <= 42 and 18 <= top.col <= 42
-    assert "winding" in top.kinds or "off_ridge" in top.kinds
-    # the plateau is recognised as one sheet away
-    dev = m.masks["deviation"][28:33, 28:33]
-    assert np.nanmedian(np.abs(dev)) > 0.75 * SP
-    # nothing far from the bump
-    for s in sus:
-        assert bump[int(s.row), int(s.col)] > 0 or min(abs(s.row - 30), abs(s.col - 30)) < 20
-    # and the clean parts stay clean
-    assert np.nanmean(m.on_sheet[:10, :10]) > 0.9
+@pytest.mark.parametrize("which", ["cos", "ct"])
+def test_on_sheet_segment_is_clean(tmp_path, which, cos_field, ct_field):
+    f = cos_field if which == "cos" else ct_field
+    res = audit(_seg(tmp_path, plane_surface(60, 60, z=40.0)), f)
+    assert abs(res.metrics.period - P) < 0.5, res.metrics.period
+    assert res.scores["on_ridge_fraction"] > 0.98
+    assert res.scores["winding_change_fraction"] == 0
+    assert res.suspects == []
+    assert patch_score(res.scores) > 0.95
 
 
-def test_planted_half_sheet_offset_region_off_sheet(tmp_path, vol):
-    zyx = plane_surface(60, 60, z=40.0)
-    bump = smooth_bump(60, 60, 10, 25, 30, 50, ramp=4)
-    zyx[..., 0] += 0.5 * SP * bump  # sits in the inter-sheet gap
-    d = _seg(tmp_path, zyx, "gap")
-    seg, grid, m, sus, lab, sc = run_audit(d, ArrayField(vol), radius=16)
-    assert sus
-    top = sus[0]
-    assert "off_sheet" in top.kinds
-    assert 10 <= top.row <= 25 and 30 <= top.col <= 50, (top.row, top.col)
+def test_concentric_cylinder_clean(tmp_path):
+    v = concentric_sheets(shape=(40, 200, 200), spacing=P)
+    res = audit(_seg(tmp_path, cylinder_surface(radius=50.0), "cyl"), ArrayField(v), params=Params(period=P))
+    assert res.scores["on_ridge_fraction"] > 0.95
+    assert res.suspects == []
 
 
-def test_outputs_written(tmp_path, vol):
-    zyx, _ = _switch_surface()
-    d = _seg(tmp_path, zyx, "switch2")
-    f = ArrayField(vol)
-    res = run_audit(d, f, radius=16, stride=2)
+@pytest.mark.parametrize("which", ["cos", "ct"])
+@pytest.mark.parametrize("sign", [1, -1])
+def test_planted_gradual_switch_is_winding(tmp_path, which, sign, cos_field, ct_field):
+    f = cos_field if which == "cos" else ct_field
+    zyx, bump = _bumped(sign * 1.0)
+    res = audit(_seg(tmp_path, zyx, f"sw{sign}"), f)
+    assert len(res.suspects) == 1, [(s.id, s.kinds, s.row, s.col) for s in res.suspects]
+    s = res.suspects[0]
+    assert "winding" in s.kinds and "off_ridge" in s.kinds
+    assert s.winding_offset == -sign            # grid normal is -z here
+    assert 30 <= s.row <= 50 and 30 <= s.col <= 50
+    # the plateau is one sheet over, the outside is on the dominant sheet
+    W = res.metrics.winding
+    assert np.all(W[37:43, 37:43] == -sign)
+    assert np.all(W[:10, :10] == 0)
+    # the ramp crosses the gap: c0 < 0 somewhere on it, > 0.5 on the plateau
+    assert np.nanmin(res.metrics.c0_smooth[40, 18:30]) < 0
+    assert np.nanmedian(res.metrics.c0[37:43, 37:43]) > 0.5
+
+
+@pytest.mark.parametrize("which", ["cos", "ct"])
+def test_planted_half_period_is_off_ridge(tmp_path, which, cos_field, ct_field):
+    f = cos_field if which == "cos" else ct_field
+    zyx, bump = _bumped(0.5, box=(15, 30, 35, 55), ramp=4)
+    res = audit(_seg(tmp_path, zyx, "gap"), f)
+    assert res.suspects
+    top = res.suspects[0]
+    assert "off_ridge" in top.kinds
+    assert 12 <= top.row <= 33 and 32 <= top.col <= 58, (top.row, top.col)
+    assert top.mean_c0 < 0
+
+
+def test_large_suspects_are_split(tmp_path, cos_field):
+    zyx, _ = _bumped(0.5, box=(10, 70, 10, 70), ramp=3)
+    res = audit(_seg(tmp_path, zyx, "big"), cos_field, params=Params(max_extent_periods=4))
+    assert len(res.suspects) >= 4
+    tile = 4 * P / res.grid.vertex_spacing
+    for s in res.suspects:
+        r0, c0, r1, c1 = s.bbox_grid
+        assert (r1 - r0) <= tile + 1 and (c1 - c0) <= tile + 1
+
+
+def test_redetect_reuses_profiles(tmp_path, cos_field):
+    zyx, _ = _bumped(0.5, ramp=4)
+    res = audit(_seg(tmp_path, zyx, "re"), cos_field)
+    strict = res.redetect(Params(c0_thr=-0.95))
+    assert strict.grid is res.grid
+    assert len(strict.suspects) <= len(res.suspects)
+    assert strict.scores["off_ridge_fraction"] < res.scores["off_ridge_fraction"]
+
+
+def test_outputs_written(tmp_path, cos_field):
+    zyx, _ = _bumped(1.0)
+    res = audit(_seg(tmp_path, zyx, "out_seg"), cos_field, stride=2)
     out = str(tmp_path / "out")
-    summ = write_outputs(out, *res, f, top_k=2, volume="synthetic", level=0, params=Params())
-    for fn in ("summary.json", "suspects.csv", "on_sheet.png", "offset.png", "suspects.png",
+    summ = res.write(out, top_k=2, volume="synthetic", level=0)
+    for fn in ("summary.json", "suspects.csv", "c0.png", "winding.png", "quality.png", "overview.png",
                "suspects_vc3d_points.json", "xsec_001.png"):
         assert os.path.exists(os.path.join(out, fn)), fn
     s = json.load(open(os.path.join(out, "summary.json")))
     assert s["suspects"] and s["suspects"][0]["id"] == 1
+    assert s["version"].startswith("0.2")
+    assert summ["scores"]["n_suspects"] == len(res.suspects)
     pc = json.load(open(os.path.join(out, "suspects_vc3d_points.json")))
     assert pc["vc_pointcollections_json_version"] == "1"
-    col = pc["collections"]["1"]
-    p = col["points"]["1"]["p"]
+    p = pc["collections"]["1"]["points"]["1"]["p"]
     z, y, x = s["suspects"][0]["zyx"]
     assert p == [x, y, z]  # VC3D stores x, y, z
+    # labels carry suspect ids
+    assert set(np.unique(res.labels)) - {0} == {sp.id for sp in res.suspects}
 
 
-def test_roi_and_upsample_map_back_to_original_grid(tmp_path, vol):
-    zyx, bump = _switch_surface()
-    # coarse grid (one node every 4 voxels), audited densified x2 inside a window
-    coarse = zyx[::2, ::2]
+def test_roi_and_upsample_map_back_to_original_grid(tmp_path, cos_field):
+    zyx, _ = _bumped(1.0)
+    coarse = zyx[::2, ::2]   # one node every 4 voxels
     d = str(tmp_path / "coarse")
     write_tifxyz(d, coarse, meta={"scale": [0.25, 0.25]})
-    seg, grid, m, sus, lab, sc = run_audit(d, ArrayField(vol), radius=16, roi="5:28,5:28", upsample=2)
+    res = audit(d, cos_field, roi="5:36,5:36", upsample=2)
+    seg, grid = res.segment, res.grid
     assert seg.upsample == 2 and seg.origin == (5, 5)
     assert abs(seg.node_spacing - 2.0) < 1e-6
     assert grid.orig_rows[0] == 5 and abs(grid.orig_rows[1] - 5.5) < 1e-9
-    assert sus
-    top = sus[0]
-    # bump centre is at original coarse grid (15, 15)
-    assert 8 <= top.row <= 22 and 8 <= top.col <= 22, (top.row, top.col)
-    # zyx of the suspect equals the coarse surface interpolated at (row, col)
+    assert res.suspects
+    top = res.suspects[0]
+    assert 13 <= top.row <= 27 and 13 <= top.col <= 27, (top.row, top.col)   # bump centre (20, 20)
     r, c = top.row, top.col
     r0, c0 = int(r), int(c)
     np.testing.assert_allclose(top.zyx[1:], coarse[r0, c0, 1:] + 4 * np.array([r - r0, c - c0]), atol=0.05)
+
+
+def test_auto_upsample_for_coarse_grid(tmp_path, cos_field):
+    zyx = plane_surface(30, 30, z=40.0, node=6.0)   # nodes 6 vx apart, period 10 -> needs 2x
+    d = str(tmp_path / "c6")
+    write_tifxyz(d, zyx, meta={"scale": [1 / 6, 1 / 6]})
+    res = audit(d, cos_field)
+    assert res.scores["upsample"] == 2
+    assert res.suspects == []

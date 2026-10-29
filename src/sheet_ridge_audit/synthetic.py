@@ -54,3 +54,13 @@ def cylinder_surface(radius=50.0, center=(100, 100), z_range=(5, 35), h=30, w=60
     th = np.linspace(theta0, theta1, w, dtype=np.float32)
     Z, T = np.meshgrid(zz, th, indexing="ij")
     return np.stack([Z, center[0] + radius * np.sin(T), center[1] + radius * np.cos(T)], -1)
+
+
+def parallel_cos(shape=(80, 140, 140), period=10.0, z0=0.0, noise=0.0, seed=0):
+    """Lasagna-style cos field: cos(2 pi (z - z0) / period), +1 on the sheets."""
+    z = np.arange(shape[0], dtype=np.float32)[:, None, None]
+    vol = np.cos(2 * np.pi * (z - z0) / period)
+    vol = np.broadcast_to(vol, shape).astype(np.float32).copy()
+    if noise:
+        vol += np.random.default_rng(seed).normal(0, noise, shape).astype(np.float32)
+    return vol

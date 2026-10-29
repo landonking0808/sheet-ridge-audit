@@ -3,10 +3,10 @@
 ``--backend`` selects how the field is built:
 
 * ``ct`` (default): raw CT from ``--volume`` (OME-Zarr URL or path), :class:`ZarrField`.
-* ``lasagna``: the Lasagna prediction-field backend. Looked up, in order, as the
-  module ``sheet_ridge_audit.backends.lasagna``, an installed entry point named
-  ``lasagna`` in group ``sheet_ridge_audit.backends``, or a file given with
-  ``--backend-module path/to/lasagna_backend.py``.
+* ``lasagna`` (built in, :mod:`sheet_ridge_audit.backends.lasagna`): the public
+  Lasagna ``cos`` prediction; ``volume`` is a registry name (``PHerc0139``), a
+  ``*.lasagna.json`` manifest URL/path, or a run folder. ``--backend-module``
+  still overrides it with an external file.
 * ``module:factory`` or ``path/to/file.py[:factory]``: any other plugin.
 
 A backend module exposes a factory (default name ``make_field``)::
@@ -75,6 +75,22 @@ def _resolve(name: str, module_path: str | None):
         return _load_file(path, fac or "make_field")
     raise ValueError(f"unknown backend {name!r}: pass --backend-module path/to/{name}_backend.py "
                      f"or set SRA_BACKEND_{name.upper()}=path.py[:factory]")
+
+
+def open_field(backend: str = "ct", source: str | None = None, level: int | None = None, cache_mb: int = 512,
+               module_path: str | None = None, **options):
+    """Public entry point: build a field.
+
+    open_field("lasagna", "PHerc0139")              # Lasagna cos, registry name
+    open_field("lasagna", "https://.../X.lasagna.json")
+    open_field("ct", "https://.../scan.zarr", level=1)
+    """
+    if backend == "lasagna" and not module_path:
+        from .lasagna import LasagnaField
+        if not source:
+            raise ValueError("lasagna backend needs a registry name or manifest URL")
+        return LasagnaField(source, level=level, cache_mb=cache_mb, **options)
+    return load_backend(backend, source, level, module_path=module_path, cache_mb=cache_mb, **options)
 
 
 def load_backend(name: str, volume: str | None, level: int | None = None, module_path: str | None = None,

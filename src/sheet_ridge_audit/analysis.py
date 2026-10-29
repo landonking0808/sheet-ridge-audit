@@ -1,37 +1,50 @@
-"""Per-vertex ridge metrics and segment-level suspect detection.
+"""Per-vertex ridge phase, winding offset map, and suspect detection (v0.2).
 
-Conventions (all offsets in level-0 voxels along the vertex normal):
+For each sampled vertex the profile ``p(t)``, ``t`` in ``[-R, R]`` voxels along
+the mesh normal, is reduced to:
 
-* ``on_sheet``  = (p(0) - median(p)) / (max(p) - median(p)), clipped to [-1, 1].
-  1 = the surface sits on the brightest ridge of its profile; <= 0 = it sits in
-  the inter-sheet gap. (p is the profile after light smoothing along the normal.)
-* ``offset``    = signed sub-voxel position of the nearest ridge (a local
-  maximum with enough prominence); 0 = the surface is on a ridge centre.
-* ``contrast``  = that ridge's prominence / profile range, in [0, 1].
-* ``spacing``   = the segment's sheet spacing, from the profiles' mean
-  autocorrelation (first peak after lag 0); overridable.
-* ``unwrapped`` = ``offset + k * spacing``: the nearest-ridge offset made
-  continuous over the grid by quality-guided phase unwrapping (edges taken in
-  order of ridge contrast; a maximum spanning forest, union-find). A trace that
-  stays on one sheet has a flat unwrapped map; a trace that drifts onto the
-  next sheet accumulates about +-1 spacing, and the regions it reaches carry
-  ``k != k_dominant``.
+* ``c0``: the field at the mesh, ``p(0)``. With Lasagna ``cos`` this is the
+  cosine of the winding phase: +1 on a sheet ridge, -1 midway between two
+  sheets. (Raw CT has no such scale; there ``c0 = cos(2 pi * phase)`` of the
+  smoothed phasor below.)
+* a **phasor** ``u = sum_t w(t) (p(t) - mean) exp(-2 pi i t / P_v) / (0.5 sum_t w A)``
+  at the local sheet period ``P_v`` (Hann window ``w``). For a profile
+  ``cos(2 pi (t - t0) / P)`` its phase is ``-2 pi t0 / P``: ``t0`` is the
+  position of the nearest ridge relative to the mesh, and ``|u|`` (about 1 for
+  a clean cosine of amplitude ``A``) its coherence. ``A`` = 1 for a cosine
+  field, ``sqrt(2) * std(p)`` otherwise.
+* The phasors are averaged over the surface (gaussian, ``phase_smooth_periods`` x P)
+  and their phase gives the **mesh offset from the nearest ridge** in cycles,
+  ``mu = t0 / P`` negated, wrapped to (-0.5, 0.5].
+* ``mu`` is **unwrapped** over the grid (quality-guided: a maximum spanning
+  forest over 4-neighbour edges in order of phasor coherence, union-find). The
+  result minus the segment's median is the mesh's winding offset relative to
+  its own dominant sheet, in cycles: 0 on the dominant sheet, +1 = one sheet
+  further along the mesh normal. Its rounded value is the integer
+  **winding index** ``W``.
 
-Suspect kinds:
+Detection (all thresholds in :class:`Params`):
 
-* ``off_sheet``: connected region where ``on_sheet < off_thr`` persistently.
-* ``step``: ridge-identity changes: neighbour pairs, both with clear ridges,
-  whose nearest-ridge offsets differ by more than ``step_frac * spacing``
-  (the trace jumped to the other side of a gap between two vertices).
-* ``drift``: the unwrapped offset changes by more than ``drift_frac *
-  spacing`` within ``drift_window`` voxels along the surface (gradual switch).
-* ``winding``: regions whose unwrapped winding index differs from the
-  segment's dominant one.
-* ``residue``: 2x2 cells whose wrapped offset differences do not sum to zero
-  (a screw dislocation of the ridge phase: where a sheet switch starts/ends).
+* ``off_ridge``: smoothed ``c0 < c0_thr`` (default 0: more than a quarter
+  period from the ridge, i.e. in the gap between sheets).
+* ``winding``: trusted vertices (smoothed phasor amplitude >= ``min_quality``) with ``W != 0``:
+  the trace sits on a neighbouring sheet. A gradual switch shows as a region of
+  ``W = +-1`` reached through a band of ``c0 < 0`` (where it crossed the gap).
+* ``phase_cut``: a ``W != 0`` region whose boundary is mostly unwrapping cuts
+  (the unwrapped offset jumps by ~1 across it instead of passing through the
+  gap): a phase defect, usually from the field (merged or missing sheets), not
+  a smooth switch. Kept, at half weight.
+
+Suspects are the connected regions of ``off_ridge | winding`` at least
+``min_area_periods2`` P^2 in area; regions larger than ``max_extent_periods``
+P on a side are split into tiles so every suspect is compact. Severity per
+vertex is ``clip((0.5 - c0_s) / 1.5, 0, 1) + winding_weight * min(|W|, 2)``;
+a suspect's ``score`` = area (P^2) x mean severity, and suspects are ranked by
+score.
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -40,500 +53,458 @@ from scipy import ndimage as ndi
 
 @dataclass
 class Params:
-    sigma: float = 1.0            # profile smoothing along the normal, voxels
-    surface_sigma: float = 4.0    # profile averaging across the surface (gaussian, voxels)
-    min_prominence: float = 0.12  # ridge prominence, fraction of profile range
-    spacing: float | None = None  # sheet spacing override (voxels)
-    off_thr: float = 0.25         # on_sheet below this = off sheet
-    step_frac: float = 0.5        # neighbour offset jump (fraction of spacing) = step
-    drift_frac: float = 0.6       # unwrapped change within drift_window (fraction of spacing)
-    off_ridge_frac: float = 0.35  # |smoothed offset - segment bias| above this (x spacing) = off ridge
-    winding_frac: float = 0.75    # ... above this = on a neighbouring sheet
-    drift_window: float | None = None  # voxels along the surface; default 8 * spacing
-    min_contrast: float = 0.15    # ridge contrast needed to trust an offset
-    min_region_vx2: float | None = None  # min suspect area in voxel^2; default (3*spacing)^2
-    min_valid_range: float = 1.0  # profile max-min below this = no data (masked/air)
+    c0_thr: float = 0.0              # off-ridge: smoothed c0 below this
+    smooth_periods: float = 0.5      # surface smoothing (gaussian sigma) of c0, in periods
+    phase_smooth_periods: float = 0.25  # surface smoothing of the phasors (keep small: a ramp's phase moves fast)
+    min_quality: float = 0.2         # phasor coherence needed to trust a phase (unwrapping, winding)
+    min_area_periods2: float = 2.0   # smallest suspect, in period^2 of surface
+    max_extent_periods: float = 12.0  # larger suspects are split into tiles of this size
+    winding_weight: float = 1.0      # severity weight of |W|
+    cut_fraction: float = 0.5        # W!=0 region with more cut boundary than this = phase_cut
+    period: float | None = None      # sheet period override (voxels); else measured
+    radius_periods: float = 1.0      # profile half-length, in periods
+    samples_per_period: float = 12.0  # profile sampling step = period / this
+    # v0.1 names kept so old callers do not break
+    spacing: float | None = None
+    off_thr: float | None = None
+
+    def __post_init__(self):
+        if self.period is None and self.spacing:
+            self.period = float(self.spacing)
+        if self.off_thr is not None and self.c0_thr == 0.0:
+            self.c0_thr = float(self.off_thr)
 
 
 @dataclass
 class Metrics:
-    on_sheet: np.ndarray
-    offset: np.ndarray
-    contrast: np.ndarray
-    center_value: np.ndarray
-    unwrapped: np.ndarray
-    winding: np.ndarray
+    c0: np.ndarray               # (h, w) field at the mesh (cos field) / cos(2 pi phase) (other)
+    c0_smooth: np.ndarray        # gaussian-smoothed c0
+    quality: np.ndarray          # coherence |U| of the smoothed phasor, [0, 1] (masks['amplitude']: mean |u|)
+    mu: np.ndarray               # wrapped mesh offset from the nearest ridge, cycles (-0.5, 0.5]
+    rel_offset: np.ndarray       # unwrapped mesh offset relative to the dominant sheet, cycles
+    winding: np.ndarray          # int W = round(rel_offset), 0 where untrusted
+    period_map: np.ndarray       # local period used (voxels)
     valid: np.ndarray
-    spacing: float
-    spacing_source: str
-    smoothed_offset: np.ndarray = None
+    trusted: np.ndarray
+    period: float
+    period_source: str
+    ref_offset_cycles: float     # median mesh offset from its ridge on the dominant sheet (cycles)
     masks: dict = field(default_factory=dict)
 
+    @property
+    def spacing(self):  # v0.1 name
+        return self.period
 
-def smooth_profiles(prof, offsets, sigma):
-    step = float(offsets[1] - offsets[0]) if len(offsets) > 1 else 1.0
-    if sigma <= 0:
-        return prof
-    filled = prof.copy()
-    bad = ~np.isfinite(filled)
-    if bad.any():
-        m = np.nanmean(np.where(bad, np.nan, filled), axis=-1, keepdims=True)
-        filled = np.where(bad, np.broadcast_to(m, filled.shape), filled)
-    out = ndi.gaussian_filter1d(np.nan_to_num(filled), sigma / step, axis=-1, mode="nearest")
-    out[bad] = np.nan
-    return out
+    @property
+    def offset_vox(self):
+        """Unwrapped mesh offset from the dominant sheet, voxels along the normal."""
+        return self.rel_offset * self.period_map
 
 
-def estimate_spacing(prof, valid, offsets, lo=3.0, hi=None):
-    """Sheet spacing from the mean autocorrelation of mean-removed profiles."""
-    step = float(offsets[1] - offsets[0])
-    P = prof[valid]
-    P = P[np.isfinite(P).all(1)]
-    if len(P) < 10:
-        return None
-    if len(P) > 20000:
-        P = P[np.random.default_rng(0).choice(len(P), 20000, replace=False)]
-    P = P - P.mean(1, keepdims=True)
-    P /= (P.std(1, keepdims=True) + 1e-6)
-    K = P.shape[1]
-    ac = np.array([np.mean(P[:, :K - l] * P[:, l:]) for l in range(K // 2 + 1)])
-    lags = np.arange(len(ac)) * step
-    hi = hi or lags[-1]
-    for i in range(1, len(ac) - 1):
-        if lags[i] >= lo and lags[i] <= hi and ac[i] >= ac[i - 1] and ac[i] >= ac[i + 1] and ac[i] > 0:
-            # parabolic refinement
-            d = ac[i - 1] - 2 * ac[i] + ac[i + 1]
-            frac = 0.5 * (ac[i - 1] - ac[i + 1]) / d if d != 0 else 0.0
-            return float((i + np.clip(frac, -0.5, 0.5)) * step)
-    return None
-
-
-def spacing_from_peaks(S, offsets, min_prom=0.1, lo=3.0):
-    """Median distance between consecutive prominent peaks of the profiles."""
-    if S is None or len(S) < 10:
-        return None
-    if len(S) > 20000:
-        S = S[np.random.default_rng(0).choice(len(S), 20000, replace=False)]
-    step = float(offsets[1] - offsets[0])
-    win = max(1, int(round(lo / step)))
-    pk, _, _ = ridge_peaks(S, offsets, win, min_prom)
-    r, c = np.nonzero(pk)
-    if len(r) < 20:
-        return None
-    same = r[1:] == r[:-1]
-    d = (c[1:] - c[:-1])[same] * step
-    d = d[d >= lo]
-    return float(np.median(d)) if len(d) >= 10 else None
-
-
-def spatial_smooth(prof, valid, sigma_nodes):
-    """Normalised gaussian average of neighbouring vertices' profiles."""
-    if sigma_nodes < 0.3:
-        return prof
-    w = (valid & np.isfinite(prof).all(-1)).astype(np.float32)
-    x = np.where(w[..., None] > 0, np.nan_to_num(prof), 0).astype(np.float32)
-    num = ndi.gaussian_filter(x * w[..., None], (sigma_nodes, sigma_nodes, 0), mode="constant")
-    den = ndi.gaussian_filter(w, sigma_nodes, mode="constant")
-    with np.errstate(invalid="ignore", divide="ignore"):
-        out = num / den[..., None]
-    out[~valid] = np.nan
-    out[(den < 0.2)] = np.nan
-    return out
-
-
-def ridge_peaks(sp, offsets, window, min_prom):
-    """Vectorised local maxima with window-limited prominence.
-    Returns (is_peak (M,K) bool, prominence (M,K), range (M,))."""
-    M, K = sp.shape
-    rng = np.nanmax(sp, 1) - np.nanmin(sp, 1)
-    pad = np.pad(sp, ((0, 0), (window, window)), mode="edge")
-    from numpy.lib.stride_tricks import sliding_window_view
-    win = sliding_window_view(pad, 2 * window + 1, axis=1)  # (M, K, 2w+1)
-    left_min = np.nanmin(win[..., :window], -1)
-    right_min = np.nanmin(win[..., window + 1:], -1)
-    local_max = np.nanmax(win, -1)
-    prom = sp - np.maximum(left_min, right_min)
-    is_peak = (sp >= local_max) & np.isfinite(sp) & (prom >= min_prom * rng[:, None])
-    # exclude plateaus at the profile ends (a monotone profile is not a ridge)
-    is_peak[:, 0] = False
-    is_peak[:, -1] = False
-    return is_peak, prom, rng
-
-
-def vertex_metrics(prof, valid, offsets, params: Params, vertex_spacing=1.0):
-    """Per-vertex on_sheet, offset, contrast. prof (h, w, K)."""
-    h, w, K = prof.shape
-    prof = spatial_smooth(prof, valid, params.surface_sigma / max(vertex_spacing, 1e-6))
-    sp = smooth_profiles(prof, offsets, params.sigma)
-    c = K // 2
-    flat = sp.reshape(-1, K)
-    ok = valid.reshape(-1).copy()
-    rng_all = np.nanmax(flat, 1) - np.nanmin(flat, 1)
-    ok &= np.isfinite(rng_all) & (rng_all >= params.min_valid_range)
-    on = np.full(h * w, np.nan, np.float32)
-    off = np.full(h * w, np.nan, np.float32)
-    con = np.zeros(h * w, np.float32)
-    idx = np.nonzero(ok)[0]
-    if len(idx):
-        S = flat[idx]
-        med = np.nanmedian(S, 1)
-        mx = np.nanmax(S, 1)
-        on[idx] = np.clip((S[:, c] - med) / (mx - med + 1e-6), -1, 1)
-        return on, off, con, sp, ok.reshape(h, w), idx, S, med, mx
-    return on, off, con, sp, ok.reshape(h, w), idx, None, None, None
-
-
-def nearest_ridge(S, offsets, spacing, params: Params, batch=20000):
-    """Nearest prominent ridge for each profile row of S (M, K)."""
-    if len(S) > batch:
-        parts = [nearest_ridge(S[i:i + batch], offsets, spacing, params, batch) for i in range(0, len(S), batch)]
-        return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
-    step = float(offsets[1] - offsets[0])
-    window = max(1, int(round(0.5 * spacing / step)))
-    is_peak, prom, rng = ridge_peaks(S, offsets, window, params.min_prominence)
-    M, K = S.shape
-    dist = np.where(is_peak, np.abs(offsets)[None, :], np.inf)
-    j = np.argmin(dist, 1)
-    has = np.isfinite(dist[np.arange(M), j])
-    # parabolic sub-sample refinement
-    jj = np.clip(j, 1, K - 2)
-    y0, y1, y2 = S[np.arange(M), jj - 1], S[np.arange(M), jj], S[np.arange(M), jj + 1]
-    d = y0 - 2 * y1 + y2
-    with np.errstate(invalid="ignore", divide="ignore"):
-        frac = np.where(d < 0, 0.5 * (y0 - y2) / d, 0.0)
-    frac = np.clip(np.nan_to_num(frac), -0.5, 0.5)
-    off = offsets[jj] + frac * step
-    con = np.where(has, prom[np.arange(M), j] / (rng + 1e-6), 0.0)
-    off = np.where(has, off, np.nan)
-    return off.astype(np.float32), np.clip(con, 0, 1).astype(np.float32)
-
-
-# ------------------------------------------------------------------ unwrapping
-
-def _wrap(x):
-    return x - np.round(x)
-
-
-def unwrap_offsets(offset, quality, valid, spacing):
-    """Quality-guided unwrapping of offset/spacing on the grid.
-    Returns integer winding index k (h, w) (nan-free, 0 where invalid) and
-    ``unwrapped = offset + k * spacing``."""
-    h, w = offset.shape
-    phi = offset / spacing
-    ok = valid & np.isfinite(phi)
-    n = h * w
-    parent = np.arange(n)
-    rel = np.zeros(n, np.int64)  # k[node] - k[parent[node]]
-
-    def find(a):
-        path = []
-        while parent[a] != a:
-            path.append(a)
-            a = parent[a]
-        root = a
-        # compress, accumulating offsets
-        acc = 0
-        for node in reversed(path):
-            acc += rel[node]
-            rel[node] = acc
-            parent[node] = root
-        return root
-
-    edges = []
-    q = np.where(ok, quality, 0).astype(np.float32)
-    for (dr, dc) in ((0, 1), (1, 0)):
-        a = ok[: h - dr, : w - dc] & ok[dr:, dc:]
-        ii, jj = np.nonzero(a)
-        src = ii * w + jj
-        dst = (ii + dr) * w + (jj + dc)
-        qual = np.minimum(q[ii, jj], q[ii + dr, jj + dc])
-        dk = np.round(phi[ii, jj] - phi[ii + dr, jj + dc]).astype(np.int64)  # k_dst - k_src
-        edges.append((qual, src, dst, dk))
-    if edges:
-        qual = np.concatenate([e[0] for e in edges]); src = np.concatenate([e[1] for e in edges])
-        dst = np.concatenate([e[2] for e in edges]); dk = np.concatenate([e[3] for e in edges])
-        order = np.argsort(-qual, kind="stable")
-        for e in order:
-            a, b, d = int(src[e]), int(dst[e]), int(dk[e])
-            ra, rb = find(a), find(b)
-            if ra == rb:
-                continue
-            ka, kb = rel[a], rel[b]  # k relative to own roots (after find, parent is root)
-            # want k_b - k_a = d  ->  k_rb = k_a + d - kb  relative to ra
-            parent[rb] = ra
-            rel[rb] = ka + d - kb
-    k = np.zeros(n, np.int64)
-    for i in np.nonzero(ok.reshape(-1))[0]:
-        find(int(i))
-    k = rel.copy()
-    roots = parent
-    k[roots == np.arange(n)] = 0
-    k = k.reshape(h, w)
-    k[~ok] = 0
-    # make the dominant winding (by count, per component) zero
-    lab, nl = ndi.label(ok)
-    for L in range(1, nl + 1):
-        m = lab == L
-        vals, cnt = np.unique(k[m], return_counts=True)
-        k[m] -= vals[np.argmax(cnt)]
-    unwrapped = np.where(ok, offset + k * spacing, np.nan).astype(np.float32)
-    return k.astype(np.int32), unwrapped
-
-
-def residues(offset, valid, spacing):
-    """2x2 cells whose wrapped phase differences sum to a nonzero integer."""
-    phi = offset / spacing
-    ok = valid & np.isfinite(phi)
-    a, b, c, d = phi[:-1, :-1], phi[:-1, 1:], phi[1:, 1:], phi[1:, :-1]
-    s = _wrap(b - a) + _wrap(c - b) + _wrap(d - c) + _wrap(a - d)
-    cell_ok = ok[:-1, :-1] & ok[:-1, 1:] & ok[1:, 1:] & ok[1:, :-1]
-    r = np.zeros_like(ok, dtype=np.int8)
-    r[:-1, :-1] = np.where(cell_ok, np.round(s), 0).astype(np.int8)
-    return r
-
-
-# ------------------------------------------------------------------ maps
-
-def nan_median_filter(a, valid, size):
-    from numpy.lib.stride_tricks import sliding_window_view
-    pad = size // 2
-    x = np.where(valid, a, np.nan).astype(np.float32)
-    xp = np.pad(x, pad, mode="constant", constant_values=np.nan)
-    win = sliding_window_view(xp, (size, size))
-    with np.errstate(all="ignore"):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            out = np.nanmedian(win.reshape(*a.shape, -1), -1)
-    return np.where(valid, out, np.nan)
-
-
-def nan_range_filter(a, valid, radius):
-    """max - min of finite values within a (2r+1)^2 window."""
-    x = np.where(valid & np.isfinite(a), a, np.nan)
-    hi = ndi.maximum_filter(np.where(np.isfinite(x), x, -np.inf), size=2 * radius + 1, mode="constant", cval=-np.inf)
-    lo = ndi.minimum_filter(np.where(np.isfinite(x), x, np.inf), size=2 * radius + 1, mode="constant", cval=np.inf)
-    r = hi - lo
-    r[~np.isfinite(r)] = 0
-    return np.where(valid, r, 0)
-
+# --------------------------------------------------------------------- helpers
 
 def nan_gaussian(a, valid, sigma):
+    """Normalised gaussian smoothing over ``valid & finite``; NaN elsewhere."""
     ok = valid & np.isfinite(a)
+    if sigma < 0.3:
+        return np.where(ok, a, np.nan).astype(np.float32)
     num = ndi.gaussian_filter(np.where(ok, a, 0).astype(np.float32), sigma, mode="constant")
     den = ndi.gaussian_filter(ok.astype(np.float32), sigma, mode="constant")
     with np.errstate(invalid="ignore", divide="ignore"):
         out = num / den
     out[~valid | (den < 0.2)] = np.nan
-    return out
+    return out.astype(np.float32)
 
 
-def compute_metrics(grid, params: Params) -> Metrics:
-    import warnings
+def _wrap(x):
+    return x - np.round(x)
+
+
+def phasors(prof, offsets, period_map, valid, cos_field, batch=50000):
+    """Normalised phasor u (h, w) complex64 at the local period; NaN where invalid."""
+    h, w, K = prof.shape
+    t = offsets.astype(np.float64)
+    R = max(abs(t[0]), abs(t[-1]))
+    win = 0.5 + 0.5 * np.cos(np.pi * t / (R + 1e-9))      # Hann over [-R, R]
+    flat = prof.reshape(-1, K)
+    per = period_map.reshape(-1)
+    ok = valid.reshape(-1) & np.isfinite(per) & (per > 0)
+    u = np.full(h * w, np.nan + 1j * np.nan, np.complex64)
+    idx = np.nonzero(ok)[0]
+    for s in range(0, len(idx), batch):
+        ii = idx[s:s + batch]
+        S = flat[ii].astype(np.float64)
+        fin = np.isfinite(S)
+        ww = win[None, :] * fin
+        S0 = np.where(fin, S, 0.0)
+        mean = (ww * S0).sum(1, keepdims=True) / np.maximum(ww.sum(1, keepdims=True), 1e-9)
+        D = np.where(fin, S0 - mean, 0.0)
+        E = np.exp(-2j * np.pi * t[None, :] / per[ii, None])
+        z = (ww * D * E).sum(1)
+        norm = 0.5 * ww.sum(1)
+        if cos_field:
+            amp = 1.0
+        else:
+            var = (ww * D * D).sum(1) / np.maximum(ww.sum(1), 1e-9)
+            amp = np.sqrt(2.0 * np.maximum(var, 1e-12))
+        u[ii] = (z / (norm * amp)).astype(np.complex64)
+    return u.reshape(h, w)
+
+
+def unwrap_cycles(phi, quality, ok):
+    """Quality-guided unwrapping of a wrapped field ``phi`` (cycles) on the grid.
+
+    A maximum spanning forest over 4-neighbour edges (edge quality = the lower
+    of its two vertices'), built with union-find; each edge fixes the integer
+    difference ``round(phi_a - phi_b)``. Returns ``(k, unwrapped)``; ``k`` is 0
+    on the most common winding of each connected component."""
+    h, w = phi.shape
+    n = h * w
+    parent = np.arange(n, dtype=np.int64)
+    rel = np.zeros(n, np.int64)          # k[node] - k[parent[node]]
+    ph = np.where(ok, phi, 0.0)
+    q = np.where(ok, quality, -1.0).astype(np.float32)
+    srcs, dsts, dks, quals = [], [], [], []
+    for dr, dc in ((0, 1), (1, 0)):
+        a = ok[: h - dr, : w - dc] & ok[dr:, dc:]
+        ii, jj = np.nonzero(a)
+        srcs.append(ii * w + jj)
+        dsts.append((ii + dr) * w + (jj + dc))
+        dks.append(np.round(ph[ii, jj] - ph[ii + dr, jj + dc]).astype(np.int64))  # k_dst - k_src
+        quals.append(np.minimum(q[ii, jj], q[ii + dr, jj + dc]))
+    src = np.concatenate(srcs).tolist()
+    dst = np.concatenate(dsts).tolist()
+    dk = np.concatenate(dks).tolist()
+    order = np.argsort(-np.concatenate(quals), kind="stable").tolist()
+    par = parent.tolist()
+    rl = rel.tolist()
+
+    def find(a):
+        # returns (root, k[a] - k[root]) with path compression
+        path = []
+        while par[a] != a:
+            path.append(a)
+            a = par[a]
+        acc = 0
+        for node in reversed(path):
+            acc += rl[node]
+            rl[node] = acc
+            par[node] = a
+        return a
+
+    for e in order:
+        a, b, d = src[e], dst[e], dk[e]
+        ra = find(a)
+        rb = find(b)
+        if ra == rb:
+            continue
+        ka = rl[a] if a != ra else 0
+        kb = rl[b] if b != rb else 0
+        par[rb] = ra
+        rl[rb] = ka + d - kb
+    flat_ok = np.nonzero(ok.reshape(-1))[0].tolist()
+    k = np.zeros(n, np.int64)
+    for i in flat_ok:
+        r = find(i)
+        k[i] = rl[i] if i != r else 0
+    k = k.reshape(h, w)
+    k[~ok] = 0
+    lab, nl = ndi.label(ok)
+    if nl:
+        for L, sl in enumerate(ndi.find_objects(lab), start=1):
+            m = lab[sl] == L
+            vals, cnt = np.unique(k[sl][m], return_counts=True)
+            k[sl][m] -= vals[np.argmax(cnt)]
+    unw = np.where(ok, phi + k, np.nan).astype(np.float32)
+    return k.astype(np.int32), unw
+
+
+def residues(phi, ok):
+    """2x2 cells whose wrapped phase differences sum to a nonzero integer."""
+    a, b, c, d = phi[:-1, :-1], phi[:-1, 1:], phi[1:, 1:], phi[1:, :-1]
+    s = _wrap(b - a) + _wrap(c - b) + _wrap(d - c) + _wrap(a - d)
+    cell_ok = ok[:-1, :-1] & ok[:-1, 1:] & ok[1:, 1:] & ok[1:, :-1]
+    r = np.zeros(ok.shape, np.int8)
+    r[:-1, :-1] = np.where(cell_ok, np.round(np.nan_to_num(s)), 0).astype(np.int8)
+    return r
+
+
+# --------------------------------------------------------------------- metrics
+
+def compute_metrics(grid, params: Params | None = None) -> Metrics:
+    params = params or Params()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         return _compute_metrics(grid, params)
 
 
+def _period_map(grid, P, valid, sigma):
+    lp = getattr(grid, "local_period", None)
+    if lp is None:
+        return np.where(valid, P, np.nan).astype(np.float32), "global"
+    lp = np.where(valid & np.isfinite(lp) & (lp > 0), lp, np.nan)
+    if np.isfinite(lp).sum() < 10:
+        return np.where(valid, P, np.nan).astype(np.float32), "global"
+    med = float(np.nanmedian(lp))
+    s = nan_gaussian(lp * (P / med), valid, max(sigma, 2.0))
+    s = np.where(np.isfinite(s), s, P)
+    s = np.clip(s, 0.6 * P, 1.6 * P)
+    return np.where(valid, s, np.nan).astype(np.float32), "local (field prior x measured/median)"
+
+
 def _compute_metrics(grid, params: Params) -> Metrics:
     prof, valid, offsets = grid.profiles, grid.valid, grid.offsets
     h, w, K = prof.shape
-    on, off, con, sp, ok, idx, S, med, mx = vertex_metrics(prof, valid, offsets, params, grid.vertex_spacing)
-    if params.spacing:
-        spacing, src = float(params.spacing), "given"
+    if params.period:
+        P, src = float(params.period), "given"
+    elif getattr(grid, "period", None):
+        P, src = float(grid.period), grid.period_info.get("source", "pilot")
     elif getattr(grid, "field_spacing", None):
-        spacing, src = float(grid.field_spacing), "field"
+        P, src = float(grid.field_spacing), "field"
     else:
-        est = spacing_from_peaks(S, offsets)
-        src = "peak spacing"
-        if est is None:
-            est = estimate_spacing(sp, ok, offsets)
-            src = "autocorrelation"
-        if est is None:
-            spacing, src = float((offsets[-1] - offsets[0]) / 3), "fallback (range/3)"
-        else:
-            spacing = est
-    if S is not None and len(idx):
-        o, c = nearest_ridge(S, offsets, spacing, params)
-        off[idx] = o
-        con[idx] = c
-        # on-sheet score, normalised within one spacing window around the surface
-        win = np.abs(offsets) <= max(0.75 * spacing, 2.0)
-        Sw = S[:, win]
-        med = np.nanmedian(Sw, 1)
-        mx = np.nanmax(Sw, 1)
-        on[idx] = np.clip((S[:, K // 2] - med) / (mx - med + 1e-6), -1, 1)
-    on, off, con = on.reshape(h, w), off.reshape(h, w), con.reshape(h, w)
-    center = grid.profiles[..., K // 2].copy()
-    if not getattr(grid, "ridge_is_high", True):
-        center = -center
-    center[~ok] = np.nan
-    trusted = ok & np.isfinite(off) & (con >= params.min_contrast)
-    k, unw = unwrap_offsets(off, con, trusted, spacing)
-    sig = max(1.0, spacing / max(grid.vertex_spacing, 1e-6))
-    sm = nan_gaussian(unw, trusted, sig)
-    return Metrics(on_sheet=np.where(ok, on, np.nan), offset=np.where(ok, off, np.nan), contrast=np.where(ok, con, 0),
-                   center_value=center, unwrapped=unw, winding=k, valid=ok, spacing=spacing,
-                   spacing_source=src, smoothed_offset=sm,
-                   masks={"trusted": trusted})
+        from .profiles import spectrum_period
+        flat = prof[valid]
+        step = float(offsets[1] - offsets[0])
+        P, _ = spectrum_period(flat[:: max(1, len(flat) // 5000)], step, 3.0, offsets[-1] - offsets[0])
+        P, src = (P, "profile spectrum") if P else (float(offsets[-1] - offsets[0]) / 2, "fallback")
+    vs = grid.vertex_spacing
+    sig = max(0.0, params.smooth_periods * P / max(vs, 1e-6))
+    psig = max(0.0, params.phase_smooth_periods * P / max(vs, 1e-6))
+    pmap, psrc = _period_map(grid, P, valid, sig)
+    cos_field = bool(getattr(grid, "cos_field", False))
+    u = phasors(prof, offsets, pmap, valid, cos_field)
+    ur = nan_gaussian(u.real, valid, psig)
+    ui = nan_gaussian(u.imag, valid, psig)
+    U = ur + 1j * ui
+    # coherence |U| (drops where the phase moves fast, e.g. on a switch's ramp) orders
+    # the unwrapping; the smoothed per-vertex amplitude decides which vertices are trusted
+    quality = np.clip(np.abs(np.nan_to_num(U)), 0, 1.5).astype(np.float32)
+    amplitude = np.clip(nan_gaussian(np.abs(u), valid, psig), 0, 1.5)
+    # ridge at t0 -> arg(U) = -2 pi t0 / P; mesh offset from the ridge mu = -t0 / P = arg(U) / 2 pi
+    mu = (np.angle(np.nan_to_num(U)) / (2 * np.pi)).astype(np.float32)
+    mu = np.where(valid & np.isfinite(ur), mu, np.nan)
+    if cos_field:
+        c0 = prof[..., K // 2].copy()
+    else:
+        c0 = np.cos(2 * np.pi * mu).astype(np.float32)
+    c0[~valid] = np.nan
+    c0s = nan_gaussian(c0, valid, sig)
+    trusted = valid & np.isfinite(mu) & (np.nan_to_num(amplitude) >= params.min_quality)
+    k, unw = unwrap_cycles(mu, quality, trusted)
+    ref = float(np.nanmedian(unw[trusted])) if trusted.any() else 0.0
+    rel = (unw - ref).astype(np.float32)
+    W = np.where(trusted, np.round(np.nan_to_num(rel)), 0).astype(np.int32)
+    m = Metrics(c0=c0, c0_smooth=c0s, quality=np.where(valid, quality, np.nan), mu=mu, rel_offset=rel,
+                winding=W, period_map=pmap, valid=valid, trusted=trusted, period=P,
+                period_source=f"{src}; per-vertex: {psrc}", ref_offset_cycles=ref)
+    m.masks["residue"] = residues(np.nan_to_num(mu), trusted) != 0
+    m.masks["amplitude"] = amplitude
+    return m
 
+
+# --------------------------------------------------------------------- suspects
 
 @dataclass
 class Suspect:
     id: int
     kinds: list
-    severity: float
+    score: float              # area (period^2) x mean severity; ranking key
+    severity: float           # mean per-vertex severity
     area_vertices: int
     area_vx2: float
-    row: float          # original tifxyz grid row/col of the centre vertex
+    area_periods2: float
+    row: float                # original tifxyz grid row/col of the centre vertex
     col: float
     zyx: list
-    bbox_grid: list     # [r0, c0, r1, c1] original tifxyz grid
-    mean_on_sheet: float
-    max_abs_deviation: float   # voxels, max |smoothed ridge offset - segment bias|
-    winding_offset: int
-    n_step_edges: int
+    bbox_grid: list           # [r0, c0, r1, c1] original tifxyz grid
+    mean_c0: float
+    min_c0: float
+    winding_offset: int       # median W in the region (+1 = one sheet along +normal)
+    max_abs_offset_cycles: float
     n_residues: int
-    sub_rc: tuple = (0, 0)     # centre in sampled-grid coords
-    seg_rc: tuple = (0, 0)     # centre in the processed (cropped/upsampled) segment grid
+    sub_rc: tuple = (0, 0)    # centre in sampled-grid coords
+    seg_rc: tuple = (0, 0)    # centre in the processed (cropped/upsampled) segment grid
+
+    @property
+    def mean_on_sheet(self):  # v0.1 name
+        return self.mean_c0
 
 
-def detect_suspects(grid, m: Metrics, params: Params):
-    import warnings
+def _cut_regions(m: Metrics, params: Params):
+    """Label W!=0 regions and mark those whose boundary is mostly unwrapping cuts."""
+    W, tr, rel = m.winding, m.trusted, m.rel_offset
+    nz = tr & (W != 0)
+    lab, nl = ndi.label(nz)
+    cut = np.zeros(nl + 1, bool)
+    if nl == 0:
+        return lab, cut
+    edges = np.zeros(nl + 1)
+    cuts = np.zeros(nl + 1)
+    h, w = W.shape
+    for dr, dc in ((0, 1), (1, 0)):
+        A = (slice(0, h - dr), slice(0, w - dc))
+        B = (slice(dr, h), slice(dc, w))
+        both = tr[A] & tr[B] & (W[A] != W[B])
+        jump = np.abs(np.nan_to_num(rel[A] - rel[B])) > 0.5
+        for L in (lab[A], lab[B]):
+            sel = both & (L > 0)
+            edges += np.bincount(L[sel], minlength=nl + 1)
+            cuts += np.bincount(L[sel], weights=jump[sel].astype(float), minlength=nl + 1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        frac = np.where(edges > 0, cuts / edges, 0.0)
+    cut = frac > params.cut_fraction
+    cut[0] = False
+    return lab, cut
+
+
+def detect_suspects(grid, m: Metrics, params: Params | None = None):
+    params = params or Params()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         return _detect_suspects(grid, m, params)
 
 
+def _split_tiles(reg_mask, sl, tile):
+    """Split one region (mask within slice ``sl``) into tile-sized connected pieces."""
+    sub = reg_mask[sl]
+    h, w = sub.shape
+    if h <= tile and w <= tile:
+        return [(sl, sub)]
+    nr, nc = int(np.ceil(h / tile)), int(np.ceil(w / tile))
+    # equal-size tiles along each axis
+    rb = np.linspace(0, h, nr + 1).round().astype(int)
+    cb = np.linspace(0, w, nc + 1).round().astype(int)
+    out = []
+    for i in range(nr):
+        for j in range(nc):
+            piece = np.zeros_like(sub)
+            piece[rb[i]:rb[i + 1], cb[j]:cb[j + 1]] = sub[rb[i]:rb[i + 1], cb[j]:cb[j + 1]]
+            if not piece.any():
+                continue
+            lab, n = ndi.label(piece, structure=np.ones((3, 3)))
+            for L in range(1, n + 1):
+                out.append((sl, lab == L))
+    return out
+
+
 def _detect_suspects(grid, m: Metrics, params: Params):
     h, w = m.valid.shape
-    s = m.spacing
+    P = m.period
     vs = grid.vertex_spacing
     ok = m.valid
-    trusted = m.masks["trusted"]
-    sig = max(1.0, s / max(vs, 1e-6))
-    # low on-sheet score, smoothed over about one spacing of surface
-    on_s = nan_gaussian(np.nan_to_num(m.on_sheet, nan=0.0), ok, sig)
-    med_on = float(np.nanmedian(on_s[ok])) if np.isfinite(on_s[ok]).any() else 1.0
-    m.masks["off_thr_used"] = min(params.off_thr, med_on - 0.25)
-    off_p = ok & np.isfinite(on_s) & (on_s < m.masks["off_thr_used"])
-    # deviation of the smoothed unwrapped ridge offset from the segment's own bias
-    u = m.smoothed_offset
-    bias = float(np.nanmedian(u[trusted])) if np.isfinite(u[trusted]).any() else 0.0
-    dev = u - bias
-    m.masks["deviation"] = dev
-    m.masks["bias"] = bias
-    adev = np.abs(np.nan_to_num(dev, nan=0.0))
-    off_ridge = trusted & (adev > params.off_ridge_frac * s)
-    wind = trusted & (adev > params.winding_frac * s)
-    # steps: jumps of the (3x3 median) nearest-ridge offset between neighbours
-    o = nan_median_filter(m.offset, trusted, 3)
-    ot = trusted & np.isfinite(o)
-    step = np.zeros((h, w), bool)
-    for dr, dc in ((0, 1), (1, 0)):
-        a = ot[: h - dr, : w - dc] & ot[dr:, dc:]
-        jump = np.abs(o[: h - dr, : w - dc] - o[dr:, dc:]) > params.step_frac * s
-        e = a & jump
-        step[: h - dr, : w - dc] |= e
-        step[dr:, dc:] |= e
-    step &= (ndi.uniform_filter(step.astype(np.float32), 3) * 9) >= 3  # not isolated
-    # drift: change of the smoothed unwrapped offset across drift_window voxels
-    win = params.drift_window or 8 * s
-    gy, gx = np.gradient(u)
-    grad = np.sqrt(np.nan_to_num(gy) ** 2 + np.nan_to_num(gx) ** 2) / max(vs, 1e-6)  # vox / vox
-    drift = trusted & np.isfinite(u) & (grad * win > params.drift_frac * s)
-    res = residues(m.offset, trusted, s)
-    m.masks.update(off_sheet=off_p, off_ridge=off_ridge, step=step, drift=drift, winding=wind, residue=res != 0)
-
-    min_area = params.min_region_vx2 if params.min_region_vx2 is not None else (3 * s) ** 2
-    min_vertices = max(2, int(np.ceil(min_area / max(vs * vs, 1e-6))))
-    step_cl = step & ndi.binary_dilation(step, iterations=1)
-    union = (off_ridge | off_p | step_cl) & ok
-    union = ndi.binary_opening(union, iterations=1) | (step_cl & ok)
-    union = ndi.binary_closing(union, iterations=1) & ok
+    off = ok & np.isfinite(m.c0_smooth) & (m.c0_smooth < params.c0_thr)
+    wlab, cut = _cut_regions(m, params)
+    wind = m.trusted & (m.winding != 0)
+    phase_cut = wind & cut[wlab]
+    m.masks.update(off_ridge=off, winding=wind & ~phase_cut, phase_cut=phase_cut)
+    union = (off | wind) & ok
     lab, nl = ndi.label(union, structure=np.ones((3, 3)))
-    suspects = []
-    for L in range(1, nl + 1):
+    area_v = vs * vs
+    min_v = max(2, int(np.ceil(params.min_area_periods2 * P * P / max(area_v, 1e-9))))
+    tile = max(3, int(round(params.max_extent_periods * P / max(vs, 1e-9))))
+    sev_off = np.clip((0.5 - np.nan_to_num(m.c0_smooth, nan=0.5)) / 1.5, 0, 1)
+    wabs = np.minimum(np.abs(m.winding), 2) * (wind.astype(np.float32))
+    wabs = np.where(phase_cut, 0.5 * wabs, wabs)
+    sev = sev_off + params.winding_weight * wabs
+    res = m.masks.get("residue", np.zeros_like(ok))
+    pieces = []
+    for L, sl in enumerate(ndi.find_objects(lab), start=1):
+        if sl is None:
+            continue
         reg = lab == L
+        if reg[sl].sum() < min_v:
+            continue
+        for psl, pm in _split_tiles(reg, sl, tile):
+            if pm.sum() >= min_v:
+                full = np.zeros((h, w), bool)
+                full[psl] = pm
+                pieces.append(full)
+    suspects = []
+    for reg in pieces:
         n = int(reg.sum())
-        if n < min_vertices:
-            continue
-        kinds = [k for k, mk in (("off_sheet", off_p), ("off_ridge", off_ridge), ("step", step), ("drift", drift),
-                                 ("winding", wind), ("residue", res != 0))
-                 if (mk & reg).sum() >= (1 if k == "residue" else max(2, 0.1 * n if k in ("off_sheet", "off_ridge") else 2))]
-        if not kinds:
-            continue
+        kinds = []
+        n_off = int((off & reg).sum())
+        n_w = int((m.masks["winding"] & reg).sum())
+        n_c = int((phase_cut & reg).sum())
+        if n_w >= max(2, 0.1 * n):
+            kinds.append("winding")
+        if n_c >= max(2, 0.1 * n):
+            kinds.append("phase_cut")
+        if n_off >= max(2, 0.1 * n) or not kinds:
+            kinds.insert(0, "off_ridge")
         rr, cc = np.nonzero(reg)
-        dv = dev[reg]
-        dv = dv[np.isfinite(dv)]
-        du = float(np.max(np.abs(dv))) if len(dv) else 0.0   # max |deviation| from the segment bias
-        on = float(np.nanmean(m.on_sheet[reg]))
-        wo = int(np.round(np.median(dv) / s)) if len(dv) else 0
-        nst = int((step & reg).sum())
-        nres = int(np.abs(res[reg]).sum())
-        area = n * vs * vs
-        offfrac = float((off_p & reg).sum()) / n
-        sev = (1.0 * offfrac * max(0.0, 1 - on) + 1.0 * min(du / s, 2.0) + 1.0 * min(abs(wo), 2)
-               + 0.5 * min(nst / max(n, 1) * 5, 1.0))
-        sev *= np.log10(1 + area / (s * s))
-        # centre: the region vertex closest to the region's centroid
-        cr, cc_ = rr.mean(), cc.mean()
-        i = int(np.argmin((rr - cr) ** 2 + (cc - cc_) ** 2))
+        sv = float(np.mean(sev[reg]))
+        area_p2 = n * area_v / (P * P)
+        wv = m.winding[reg & m.trusted]
+        wo = int(np.round(np.median(wv))) if len(wv) else 0
+        if wo == 0 and len(wv) and (wv != 0).mean() > 0.3:
+            nzv = wv[wv != 0]
+            wo = int(np.sign(np.median(nzv)))
+        rv = np.abs(m.rel_offset[reg & m.trusted])
+        cr, ccm = rr.mean(), cc.mean()
+        # centre: the region vertex with the highest severity near the centroid
+        d2 = (rr - cr) ** 2 + (cc - ccm) ** 2
+        i = int(np.argmin(d2 - 1e-3 * sev[rr, cc]))
         r_s, c_s = int(rr[i]), int(cc[i])
         suspects.append(Suspect(
-            id=0, kinds=kinds, severity=round(float(sev), 4), area_vertices=n, area_vx2=round(float(area), 1),
+            id=0, kinds=kinds, score=round(area_p2 * sv, 4), severity=round(sv, 4), area_vertices=n,
+            area_vx2=round(n * area_v, 1), area_periods2=round(area_p2, 3),
             row=_r(grid.orig_rows[r_s], 2), col=_r(grid.orig_cols[c_s], 2),
             zyx=[round(float(v), 2) for v in grid.zyx[r_s, c_s]],
             bbox_grid=[_r(grid.orig_rows[rr.min()], 2), _r(grid.orig_cols[cc.min()], 2),
                        _r(grid.orig_rows[rr.max()], 2), _r(grid.orig_cols[cc.max()], 2)],
-            mean_on_sheet=round(on, 4), max_abs_deviation=round(du, 3), winding_offset=wo,
-            n_step_edges=nst, n_residues=nres, sub_rc=(r_s, c_s),
+            mean_c0=_r(np.nanmean(m.c0[reg])), min_c0=_r(np.nanmin(m.c0_smooth[reg])),
+            winding_offset=wo, max_abs_offset_cycles=_r(rv.max() if len(rv) else 0.0, 3),
+            n_residues=int(res[reg].sum()), sub_rc=(r_s, c_s),
             seg_rc=(int(grid.rows[r_s]), int(grid.cols[c_s]))))
-    suspects.sort(key=lambda x: (-x.severity, -x.area_vertices))
-    for i, sp_ in enumerate(suspects):
-        sp_.id = i + 1
-    return suspects, lab
+    order = sorted(range(len(suspects)), key=lambda j: (-suspects[j].score, -suspects[j].area_vertices))
+    labels = np.zeros((h, w), np.int32)
+    out = []
+    for rank, j in enumerate(order, start=1):
+        s = suspects[j]
+        s.id = rank
+        labels[pieces[j]] = rank
+        out.append(s)
+    return out, labels
 
 
-def segment_scores(grid, m: Metrics, suspects, params: Params):
-    import warnings
+def segment_scores(grid, m: Metrics, suspects, params: Params | None = None, labels=None):
+    params = params or Params()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        return _segment_scores(grid, m, suspects, params)
-
-
-def _segment_scores(grid, m: Metrics, suspects, params: Params):
-    ok = m.valid
-    n = int(ok.sum())
-    trusted = m.masks["trusted"]
-    in_susp = np.zeros_like(ok)
-    for k in ("off_sheet", "off_ridge", "step"):
-        in_susp |= m.masks.get(k, np.zeros_like(ok))
-    dev = m.masks.get("deviation")
-    on_dominant = trusted & (np.abs(np.nan_to_num(dev, nan=1e9)) <= params.off_ridge_frac * m.spacing)
-    out = {
-        "vertices_sampled": int(grid.valid.size),
-        "vertices_valid": n,
-        "spacing_vox": round(m.spacing, 3),
-        "spacing_source": m.spacing_source,
-        "mean_on_sheet": _r(np.nanmean(m.on_sheet[ok])) if n else None,
-        "median_on_sheet": _r(np.nanmedian(m.on_sheet[ok])) if n else None,
-        "off_sheet_fraction": _r((np.nan_to_num(m.on_sheet[ok], nan=1) < params.off_thr).mean()) if n else None,
-        "persistent_off_sheet_fraction": _r(m.masks["off_sheet"][ok].mean()) if n else None,
-        "ridge_found_fraction": _r(np.isfinite(m.offset[ok]).mean()) if n else None,
-        "trusted_fraction": _r(trusted[ok].mean()) if n else None,
-        "median_abs_offset_vox": _r(np.nanmedian(np.abs(m.offset[ok]))) if n else None,
-        "median_contrast": _r(np.median(m.contrast[ok])) if n else None,
-        "ridge_bias_vox": _r(m.masks.get("bias", 0.0)),
-        "off_ridge_fraction": _r(m.masks["off_ridge"][ok].mean()) if n else None,
-        "neighbour_sheet_fraction": _r(m.masks["winding"][ok].mean()) if n else None,
-        "step_vertex_fraction": _r(m.masks["step"][ok].mean()) if n else None,
-        "drift_fraction": _r(m.masks["drift"][ok].mean()) if n else None,
-        "residues": int(np.abs(m.masks["residue"]).sum()),
-        "on_dominant_ridge_fraction": _r(on_dominant[ok].mean()) if n else None,
-        "suspect_fraction": _r(in_susp[ok].mean()) if n else None,
-        "n_suspects": len(suspects),
-    }
+        ok = m.valid
+        n = int(ok.sum())
+        tr = m.trusted
+        vs = grid.vertex_spacing
+        in_s = (labels > 0) if labels is not None else np.zeros_like(ok)
+        on_dom = ok & (np.nan_to_num(m.c0_smooth, nan=-9) >= params.c0_thr) & (m.winding == 0)
+        out = {
+            "vertices_sampled": int(ok.size),
+            "vertices_valid": n,
+            "vertex_spacing_vox": _r(vs, 3),
+            "period_vox": _r(m.period, 3),
+            "period_source": m.period_source,
+            "period_map_p10_p90_vox": [_r(np.nanpercentile(m.period_map[ok], 10), 2),
+                                       _r(np.nanpercentile(m.period_map[ok], 90), 2)] if n else None,
+            "mean_c0": _r(np.nanmean(m.c0[ok])) if n else None,
+            "median_c0": _r(np.nanmedian(m.c0[ok])) if n else None,
+            "on_ridge_fraction": _r((np.nan_to_num(m.c0[ok], nan=-9) >= params.c0_thr).mean()) if n else None,
+            "off_ridge_fraction": _r(m.masks["off_ridge"][ok].mean()) if n else None,
+            "trusted_fraction": _r(tr[ok].mean()) if n else None,
+            "median_quality": _r(np.nanmedian(m.quality[ok])) if n else None,
+            "winding_change_fraction": _r(m.masks["winding"][ok].mean()) if n else None,
+            "phase_cut_fraction": _r(m.masks["phase_cut"][ok].mean()) if n else None,
+            "ref_offset_vox": _r(m.ref_offset_cycles * m.period, 3),
+            "median_abs_offset_vox": _r(np.nanmedian(np.abs(m.rel_offset[tr] * m.period_map[tr]))) if tr.any() else None,
+            "residues": int(m.masks["residue"].sum()),
+            "on_dominant_ridge_fraction": _r(on_dom[ok].mean()) if n else None,
+            "n_suspects": len(suspects),
+            "suspect_area_fraction": _r(in_s[ok].mean()) if n else None,
+            "suspect_area_vx2": round(float(in_s.sum() * vs * vs), 1),
+            "suspect_area_periods2": _r(in_s.sum() * vs * vs / m.period ** 2, 2),
+            "max_suspect_score": max([s.score for s in suspects], default=0.0),
+            "total_suspect_score": round(sum(s.score for s in suspects), 3),
+        }
     return out
 
 
