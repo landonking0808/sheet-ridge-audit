@@ -10,7 +10,7 @@ Stable public API::
 * :func:`open_field` -> a :class:`Field` (``sample(points_zyx) -> values``)
 * :class:`Params` (detection thresholds), :mod:`sheet_ridge_audit.plant` (planted switches)
 """
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 from .fields import ArrayField, Field, ZarrField, as_field  # noqa: F401,E402
 from .tifxyz import Segment, grid_normals, read_tifxyz, write_tifxyz  # noqa: F401,E402
 from .analysis import Params, Suspect, Metrics  # noqa: F401,E402

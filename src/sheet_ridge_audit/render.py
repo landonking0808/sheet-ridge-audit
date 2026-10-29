@@ -75,8 +75,9 @@ def _place_labels(pts, ext, min_d):
 
 def overview_png(path, grid, m, suspects, labels, title, top=15):
     """Two panels over the original tifxyz grid: c0 (field at the mesh) and the
-    unwrapped winding offset. Every suspect is shaded (green = winding change,
-    black = off ridge); the top ``top`` are outlined and numbered with leader lines."""
+    unwrapped winding offset. Every suspect is shaded (green = winding seam,
+    magenta = abrupt geometric step, black = off ridge); the top ``top`` are
+    outlined and numbered with leader lines."""
     h, w = m.valid.shape
     ext = _extent(grid)
     wide = w > 1.6 * h
@@ -88,19 +89,23 @@ def overview_png(path, grid, m, suspects, labels, title, top=15):
         H = 8.5
         fig, axes = plt.subplots(1, 2, figsize=(float(np.clip(2 * H / max(ar, 1e-3), 8, 20)) + 1.5, H + 1.2))
     kind_w = np.zeros(len(suspects) + 1, bool)
+    kind_g = np.zeros(len(suspects) + 1, bool)
     for s in suspects:
         kind_w[s.id] = "winding" in s.kinds
+        kind_g[s.id] = "geom_step" in s.kinds
     lab = labels
     overlay = np.zeros((h, w, 4), np.float32)
-    sw = (lab > 0) & kind_w[lab]
-    so = (lab > 0) & ~kind_w[lab]
-    overlay[sw] = (0.0, 0.75, 0.0, 0.55)
+    sg = (lab > 0) & kind_g[lab]
+    sw = (lab > 0) & kind_w[lab] & ~sg
+    so = (lab > 0) & ~kind_w[lab] & ~sg
+    overlay[sw] = (0.0, 0.75, 0.0, 0.6)
     overlay[so] = (0.0, 0.0, 0.0, 0.45)
+    overlay[sg] = (0.85, 0.0, 0.85, 0.75)
     topm = (lab > 0) & (lab <= top)
     panels = [
         (m.c0_smooth, "RdBu", -1, 1, "c0 = Lasagna cos at the mesh (smoothed): blue on a ridge, red in a gap"),
         (np.where(m.trusted, m.rel_offset, np.nan), "PuOr_r", -1.5, 1.5,
-         "winding offset vs the dominant sheet (sheets); |x| > 0.5 = another sheet"),
+         "winding offset vs the dominant sheet (context only: plateaus are not flagged, their seams are)"),
     ]
     span = max(ext[1] - ext[0], abs(ext[2] - ext[3]))
     tops = [s for s in suspects[:top]]
@@ -125,10 +130,11 @@ def overview_png(path, grid, m, suspects, labels, title, top=15):
         ax.set_ylabel("tifxyz grid row", fontsize=9)
         fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
     from matplotlib.patches import Patch
-    handles = [Patch(facecolor=(0, 0.75, 0, 0.55), label="suspect: on another sheet (winding change)"),
-               Patch(facecolor=(0, 0, 0, 0.45), label="suspect: off the ridge (in a gap)"),
+    handles = [Patch(facecolor=(0, 0.75, 0, 0.6), label="winding seam: the trace crosses onto another sheet here"),
+               Patch(facecolor=(0.85, 0, 0.85, 0.75), label="geom_step: abrupt jump of the mesh"),
+               Patch(facecolor=(0, 0, 0, 0.45), label="off the ridge (in a gap)"),
                Patch(facecolor="none", edgecolor="#d0d000", label=f"top {len(tops)} by score (numbered)")]
-    fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=9, frameon=False)
+    fig.legend(handles=handles, loc="lower center", ncol=4, fontsize=9, frameon=False)
     fig.suptitle(title, fontsize=12)
     fig.tight_layout(rect=(0, 0.04, 1, 0.97))
     fig.savefig(path, dpi=80)

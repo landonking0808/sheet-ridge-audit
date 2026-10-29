@@ -129,13 +129,13 @@ def patch_score(scores: dict) -> float:
 
 SUSPECT_COLS = ["id", "kinds", "score", "severity", "area_vertices", "area_vx2", "area_periods2", "row", "col",
                 "z", "y", "x", "bbox_r0", "bbox_c0", "bbox_r1", "bbox_c1", "mean_c0", "min_c0", "winding_offset",
-                "max_abs_offset_cycles", "n_residues"]
+                "max_abs_offset_cycles", "n_residues", "extent_periods", "confidence", "step_periods"]
 
 
 def suspect_row(s):
     return [s.id, "+".join(s.kinds), s.score, s.severity, s.area_vertices, s.area_vx2, s.area_periods2, s.row,
             s.col, *s.zyx, *s.bbox_grid, s.mean_c0, s.min_c0, s.winding_offset, s.max_abs_offset_cycles,
-            s.n_residues]
+            s.n_residues, s.extent_periods, s.confidence, s.step_periods]
 
 
 def write_outputs(out, seg, grid, m, suspects, labels, scores, field, *, xsec_field=None, top_k=10,
@@ -152,8 +152,9 @@ def write_outputs(out, seg, grid, m, suspects, labels, scores, field, *, xsec_fi
                     "node_spacing_vox": seg.node_spacing * seg.upsample, "upsample": seg.upsample,
                     "grid_origin": list(seg.origin), "meta_uuid": seg.meta.get("uuid")},
         "coordinates_note": "row/col/bbox are in the original tifxyz grid; zyx in level-0 voxels of the scan",
-        "winding_note": "winding_offset +1 = the trace sits one sheet further along the mesh normal "
-                        "(grid d/dcol x d/drow) than the segment's dominant sheet",
+        "winding_note": "winding_offset (winding seams and geom_step lines) +1 = across this seam, the smaller "
+                        "side of the trace sits one sheet further along the mesh normal (grid d/dcol x d/drow) "
+                        "than the larger side; 0 for off_ridge-only suspects",
         "volume": volume, "level": level,
         "field": field.describe() if hasattr(field, "describe") else {"name": getattr(field, "name", "?")},
         "stride": grid.stride, "roi": getattr(args, "roi", None) if args else None,
@@ -180,7 +181,7 @@ def write_outputs(out, seg, grid, m, suspects, labels, scores, field, *, xsec_fi
     maps.append("c0.png")
     wmap = np.where(m.trusted, m.rel_offset, np.nan)
     map_png(os.path.join(out, "winding.png"), grid, wmap,
-            f"unwrapped mesh offset from the dominant sheet  {tag}", cmap="PuOr_r", vmin=-1.5, vmax=1.5,
+            f"unwrapped mesh offset from the dominant sheet (context)  {tag}", cmap="PuOr_r", vmin=-1.5, vmax=1.5,
             cbar_label="cycles (sheets) along the normal; |x| > 0.5 = other sheet")
     maps.append("winding.png")
     map_png(os.path.join(out, "quality.png"), grid, m.quality, f"phase coherence  {tag}", cmap="viridis",

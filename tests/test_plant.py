@@ -3,6 +3,7 @@ import json
 import os
 
 import numpy as np
+import pytest
 
 from sheet_ridge_audit import ArrayField, audit
 from sheet_ridge_audit.cli import main as cli_main
@@ -22,7 +23,7 @@ def _src(tmp_path, n=90):
 def test_apply_plants_moves_along_normal(tmp_path):
     seg = read_tifxyz(_src(tmp_path))
     p = Plant(row=45, col=45, radius=5, ramp=8, shift=1.0, period=P)
-    zyx, valid, w = apply_plants(seg, [p])
+    zyx, valid, w = apply_plants(seg, [p], method="normal")
     dz = zyx[..., 0] - seg.zyx[..., 0]
     assert np.isclose(dz[45, 45], -P)          # grid normal of this plane is -z
     assert np.isclose(dz[0, 0], 0) and valid.all()
@@ -58,3 +59,27 @@ def test_plant_cli_with_given_period(tmp_path, capsys):
     assert rec["plants"][0]["kind"] == "gap" and rec["plants"][0]["shift_vox"] == 5.0
     seg = read_tifxyz(out)
     assert np.isclose(seg.zyx[45, 45, 0], 40.0 - 5.0)
+
+
+def test_iso_plants_keep_edge_lengths(tmp_path):
+    """v0.3 default: near-isometric plants (grid re-fitted on the displaced surface)."""
+    seg = read_tifxyz(_src(tmp_path))
+    pn = Plant(row=45, col=45, radius=5, ramp=8, shift=1.0, period=P)
+    pi = Plant(row=45, col=45, radius=5, ramp=8, shift=1.0, period=P)
+    zn, _, _ = apply_plants(seg, [pn], method="normal")
+    zi, valid, w = apply_plants(seg, [pi])
+    assert pi.method == "iso" and pn.method == "normal"
+    assert pi.max_edge_ratio < pn.max_edge_ratio
+    assert pn.max_edge_ratio > 1.2 and pi.max_edge_ratio < 1.12
+    dz = zi[..., 0] - seg.zyx[..., 0]
+    assert dz[45, 45] == pytest.approx(-P, abs=0.2)    # plateau still one period along the normal
+    assert np.isclose(dz[0, 0], 0) and valid.all()
+
+
+def test_plant_method_recorded(tmp_path):
+    src = _src(tmp_path)
+    out = str(tmp_path / "iso.tifxyz")
+    plant_tifxyz(src, out, [Plant(row=45, col=45, radius=5, ramp=8, shift=1.0, period=P)])
+    d = json.load(open(os.path.join(out, "plants.json")))
+    assert d["method"] == "iso" and d["plants"][0]["method"] == "iso"
+    assert load_plants(out)[0].max_edge_ratio > 0

@@ -45,7 +45,11 @@ def _common(p):
     g.add_argument("--c0-thr", type=float, default=Params.c0_thr,
                    help="off-ridge where the smoothed field at the mesh is below this (default 0)")
     g.add_argument("--min-quality", type=float, default=Params.min_quality,
-                   help="phase coherence needed for winding/unwrapping (default 0.3)")
+                   help="phase coherence needed to trust a vertex's phase (default 0.2)")
+    g.add_argument("--unwrap-quality", type=float, default=Params.unwrap_quality,
+                   help="coherence both ends of an unwrapping edge need (default 0 = no gate; try 0.35)")
+    g.add_argument("--no-geom-step", action="store_true",
+                   help="do not flag abrupt geometric steps (geom_step suspects)")
     g.add_argument("--min-area", type=float, default=Params.min_area_periods2,
                    help="smallest suspect, in period^2 (default 2)")
     g.add_argument("--max-extent", type=float, default=Params.max_extent_periods,
@@ -57,7 +61,8 @@ def _common(p):
 
 def _params(a):
     return Params(period=a.period, c0_thr=a.c0_thr, min_quality=a.min_quality, min_area_periods2=a.min_area,
-                  max_extent_periods=a.max_extent, smooth_periods=a.smooth)
+                  max_extent_periods=a.max_extent, smooth_periods=a.smooth, unwrap_quality=a.unwrap_quality,
+                  geom_step=not a.no_geom_step)
 
 
 def _up(a):
@@ -133,7 +138,9 @@ def cmd_audit(a):
     s = summ["scores"]
     print(json.dumps({"segment": seg.uuid, "out": out, "n_suspects": len(res.suspects),
                       "on_ridge_fraction": s["on_ridge_fraction"], "winding_change_fraction":
-                      s["winding_change_fraction"], "period_vox": s["period_vox"],
+                      s["winding_change_fraction"], "suspect_area_fraction": s["suspect_area_fraction"],
+                      "n_winding_seams": s.get("n_winding_seams"), "n_geom_steps": s.get("n_geom_steps"),
+                      "period_vox": s["period_vox"],
                       "patch_score": summ["patch_score"], "seconds": summ["total_seconds"]}))
     return 0
 
@@ -227,7 +234,8 @@ def cmd_patch_score(a):
     params = _params(a)
     rows = []
     keys = ["mean_c0", "median_c0", "on_ridge_fraction", "off_ridge_fraction", "winding_change_fraction",
-            "phase_cut_fraction", "median_quality", "residues", "n_suspects", "suspect_area_fraction",
+            "winding_seam_fraction", "geom_step_fraction", "n_winding_seams", "n_geom_steps",
+            "median_quality", "residues", "n_suspects", "suspect_area_fraction",
             "vertices_valid", "period_vox"]
     for d in paths:
         t0 = time.time()
@@ -274,9 +282,11 @@ def cmd_plant(a):
     field = None
     if not a.period:
         field = _field(a, a.src)
-    plant_tifxyz(a.src, a.out, plants, field=field, overwrite=a.overwrite)
-    print(json.dumps({"out": a.out, "plants": [{"row": p.row, "col": p.col, "shift": p.shift, "kind": p.kind,
-                                                "period": round(p.period, 2), "shift_vox": p.shift_vox}
+    plant_tifxyz(a.src, a.out, plants, field=field, overwrite=a.overwrite, method=a.method)
+    print(json.dumps({"out": a.out, "method": a.method,
+                      "plants": [{"row": p.row, "col": p.col, "shift": p.shift, "kind": p.kind,
+                                  "period": round(p.period, 2), "shift_vox": p.shift_vox,
+                                  "max_edge_ratio": p.max_edge_ratio}
                                                for p in plants]}))
     return 0
 
@@ -335,6 +345,9 @@ def main(argv=None):
     p.add_argument("--shift", type=float, action="append", default=[],
                    help="shift in sheet periods (repeat to cycle; default 1.0; 0.5 = into the gap)")
     p.add_argument("--random-sign", action="store_true", help="randomly flip each shift's sign")
+    p.add_argument("--method", choices=["iso", "normal"], default="iso",
+                   help="iso (default): near-isometric plants (grid re-fitted so edge lengths stay as in the "
+                        "clean mesh); normal: v0.2 plants moved along raw normals (stretch the ramp)")
     p.add_argument("--overwrite", action="store_true")
     p.set_defaults(fn=cmd_plant)
     p = sub.add_parser("lasagna-registry", help="list the public Lasagna predictions known to the tool")

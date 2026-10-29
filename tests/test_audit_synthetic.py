@@ -70,7 +70,11 @@ def test_planted_gradual_switch_is_winding(tmp_path, which, sign, cos_field, ct_
     s = res.suspects[0]
     assert "winding" in s.kinds and "off_ridge" in s.kinds
     assert s.winding_offset == -sign            # grid normal is -z here
-    assert 30 <= s.row <= 50 and 30 <= s.col <= 50
+    # v0.3: the suspect is the seam on the ramp (where the trace crosses the gap), not the plateau
+    assert 18 <= s.row <= 62 and 18 <= s.col <= 62
+    assert not (30 <= s.row <= 50 and 30 <= s.col <= 50 and res.labels[int(s.row), int(s.col)] == 0)
+    assert res.labels[38:43, 38:43].max() == 0          # plateau interior not flagged
+    assert res.labels[40, 18:30].max() == s.id          # the ramp is
     # the plateau is one sheet over, the outside is on the dominant sheet
     W = res.metrics.winding
     assert np.all(W[37:43, 37:43] == -sign)
@@ -121,7 +125,7 @@ def test_outputs_written(tmp_path, cos_field):
         assert os.path.exists(os.path.join(out, fn)), fn
     s = json.load(open(os.path.join(out, "summary.json")))
     assert s["suspects"] and s["suspects"][0]["id"] == 1
-    assert s["version"].startswith("0.2")
+    assert s["version"].startswith("0.3")
     assert summ["scores"]["n_suspects"] == len(res.suspects)
     pc = json.load(open(os.path.join(out, "suspects_vc3d_points.json")))
     assert pc["vc_pointcollections_json_version"] == "1"
@@ -156,4 +160,56 @@ def test_auto_upsample_for_coarse_grid(tmp_path, cos_field):
     write_tifxyz(d, zyx, meta={"scale": [1 / 6, 1 / 6]})
     res = audit(d, cos_field)
     assert res.scores["upsample"] == 2
+    assert res.suspects == []
+
+
+# ------------------------------------------------------------------ v0.3
+
+@pytest.mark.parametrize("sign", [1, -1])
+def test_abrupt_one_period_step_is_geom_step(tmp_path, sign, cos_field):
+    """A one-node jump of a whole period keeps the phase (mod 1): only geometry sees it."""
+    zyx, bump = _bumped(sign * 1.0, ramp=1)
+    # period given: in this shallow synthetic volume only the wall's sideways normals reach
+    # far enough for the pilot's long profiles, which would mis-measure it
+    res = audit(_seg(tmp_path, zyx, f"step{sign}"), cos_field, period=P)
+    g = [s for s in res.suspects if "geom_step" in s.kinds]
+    assert g, [(s.kinds, s.row, s.col) for s in res.suspects]
+    top = max(g, key=lambda s: s.score)
+    assert top.winding_offset == -sign           # grid normal is -z
+    assert top.step_periods == pytest.approx(1.0, abs=0.3)
+    assert 26 <= top.row <= 54 and 26 <= top.col <= 54
+    assert res.labels[38:43, 38:43].max() == 0   # the raised plateau itself is not flagged
+
+
+def test_geom_step_off_switch(tmp_path, cos_field):
+    zyx, _ = _bumped(1.0, ramp=1)
+    res = audit(_seg(tmp_path, zyx, "nogeom"), cos_field, params=Params(geom_step=False), period=P)
+    assert not any("geom_step" in s.kinds for s in res.suspects)
+
+
+def test_geometry_step_mask_clean_plane_is_empty():
+    from sheet_ridge_audit.analysis import geometry_step_mask
+    from sheet_ridge_audit.tifxyz import grid_normals
+    zyx = plane_surface(40, 40, z=40.0).astype(np.float32)
+    ok = np.ones((40, 40), bool)
+    m, st = geometry_step_mask(zyx, grid_normals(zyx, ok), ok, period=P, vertex_spacing=2.0)
+    assert not m.any() and st.max() == 0
+
+
+def test_unwrap_gating_splits_components():
+    from sheet_ridge_audit.analysis import unwrap_cycles
+    phi = np.zeros((20, 20), np.float32)
+    phi[:, 10:] = 0.45                       # an ambiguous half-cycle step down the middle
+    q = np.ones_like(phi)
+    ok = np.ones(phi.shape, bool)
+    k, unw, comp = unwrap_cycles(phi, q, ok, max_step=0.4, return_components=True)
+    assert len(np.unique(comp)) == 2 and (k == 0).all()
+    k2, _, comp2 = unwrap_cycles(phi, q, ok, return_components=True)   # v0.2 behaviour: one component
+    assert len(np.unique(comp2)) == 1
+
+
+def test_plateau_interior_alone_is_not_flagged(tmp_path, cos_field):
+    """A trace that sits one sheet over across the whole ROI has no seam inside the ROI."""
+    zyx = plane_surface(60, 60, z=40.0 + P)
+    res = audit(_seg(tmp_path, zyx, "onesheetover"), cos_field)
     assert res.suspects == []
