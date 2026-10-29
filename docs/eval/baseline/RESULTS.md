@@ -233,7 +233,7 @@ Shipped here: `out/baseline_table.csv`, `out/baseline_all_settings.csv`, `out/ba
 
 ```bash
 export SRA_EVAL_DATA=$PWD/sra-eval-data
-pip install 'git+https://github.com/landonking-gif/sheet-ridge-audit@0b3578a'   # v0.2, the version measured here
+pip install 'git+https://github.com/landonking0808/sheet-ridge-audit@0b3578a'   # v0.2, the version measured here
 python scripts/eval/baseline/make_plants.py            # 40 sites, plants (seed 0)
 python scripts/eval/baseline/make_iso_plants.py; python scripts/eval/baseline/make_iso2_plants.py
 python scripts/eval/baseline/run_sra.py clean gradual_1p steep_1p half_p gradual_1p_iso2 half_p_iso2   # streams Lasagna; 3-7 min each

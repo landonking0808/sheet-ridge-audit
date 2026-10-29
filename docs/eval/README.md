@@ -27,7 +27,7 @@ from their public URLs. The census and baseline scripts measured **v0.2**;
 to reproduce their numbers exactly, install that version:
 
 ```bash
-pip install 'git+https://github.com/landonking-gif/sheet-ridge-audit@0b3578a'
+pip install 'git+https://github.com/landonking0808/sheet-ridge-audit@0b3578a'
 export SRA_EVAL_DATA=$PWD/sra-eval-data
 ```
 

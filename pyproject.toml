@@ -24,8 +24,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/landonking-gif/sheet-ridge-audit"
-Issues = "https://github.com/landonking-gif/sheet-ridge-audit/issues"
+Homepage = "https://github.com/landonking0808/sheet-ridge-audit"
+Issues = "https://github.com/landonking0808/sheet-ridge-audit/issues"
 
 [project.optional-dependencies]
 test = ["pytest", "zarr>=2.11,<3"]

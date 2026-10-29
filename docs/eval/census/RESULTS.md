@@ -166,7 +166,7 @@ Each figure is 186-247 KB (a 256-colour PNG).
 
 ```bash
 export SRA_EVAL_DATA=$PWD/sra-eval-data
-pip install 'git+https://github.com/landonking-gif/sheet-ridge-audit@0b3578a'   # v0.2, the version measured here
+pip install 'git+https://github.com/landonking0808/sheet-ridge-audit@0b3578a'   # v0.2, the version measured here
 python scripts/eval/census/census.py                 # all 38 segments, stride 2 (~2 h on 2 vCPU; REVERSE=1 runs a 2nd worker from the other end)
 python scripts/eval/census/review_render.py select   # 8 segments, suspects + controls -> review/items.json (the key)
 XLEVEL=1 python scripts/eval/census/review_render.py render   # blind CT cross-sections -> review/img/

@@ -43,7 +43,7 @@ expert labels; see *Evaluation* before trusting a flag.
 ## Install
 
 ```bash
-pip install git+https://github.com/landonking-gif/sheet-ridge-audit
+pip install git+https://github.com/landonking0808/sheet-ridge-audit
 sheet-ridge-audit --help
 ```
 
@@ -51,7 +51,7 @@ Python >= 3.9; pulls numpy, scipy, tifffile, imagecodecs, numcodecs, fsspec,
 aiohttp, requests, matplotlib. No GPU, no torch. For development:
 
 ```bash
-git clone https://github.com/landonking-gif/sheet-ridge-audit && cd sheet-ridge-audit
+git clone https://github.com/landonking0808/sheet-ridge-audit && cd sheet-ridge-audit
 pip install -e '.[test]'    # + pytest, zarr (tests only)
 pytest -q                   # offline, 40 tests, about 1-2 min
 ```
